@@ -1,0 +1,128 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+
+{% block title %}
+Mi Cuenta
+{% endblock %}
+
+{% block content %}
+
+<div class="container">
+
+    <div class="profile-header">
+
+        <div class="avatar-circle">
+
+            {{ request.user.username|first|upper }}
+
+        </div>
+
+        <div>
+
+            <h1>
+                {{ request.user.username }}
+            </h1>
+
+            <p>
+                {{ request.user.email }}
+            </p>
+
+        </div>
+
+    </div>
+
+    <div class="profile-card">
+
+        <h2>{% icon "chart-bar" size=20 %} Estado del Perfil</h2>
+
+        <div class="progress-container">
+
+            <div
+                class="progress-bar"
+                style="width:{{ porcentaje }}%;">
+            </div>
+
+        </div>
+
+        <p>
+            Perfil completado:
+            {{ porcentaje }}%
+        </p>
+
+    </div>
+
+    <div class="profile-card">
+
+        <h2>{% icon "clipboard-list" size=20 %} Información Tributaria</h2>
+
+        <div class="info-grid">
+
+            <div>
+                <strong>DUI</strong>
+                <p>{{ perfil.dui|default:"No registrado" }}</p>
+            </div>
+
+            <div>
+                <strong>NIT</strong>
+                <p>{{ perfil.nit|default:"No registrado" }}</p>
+            </div>
+
+            <div>
+                <strong>Teléfono</strong>
+                <p>{{ perfil.telefono|default:"No registrado" }}</p>
+            </div>
+
+            <div>
+                <strong>Salario</strong>
+                <p>${{ perfil.salario_mensual|default:"0" }}</p>
+            </div>
+
+            <div>
+                <strong>Actividad Económica</strong>
+                <p>
+                    {{ perfil.actividad_economica|default:"No registrada" }}
+                </p>
+            </div>
+
+            <div>
+                <strong>Tipo</strong>
+                <p>{{ perfil.tipo_contribuyente }}</p>
+            </div>
+
+        </div>
+
+        <a
+            href="{% url 'editar_perfil' %}"
+            class="btn-primary">
+
+            Editar Información
+
+        </a>
+
+    </div>
+
+  <div class="profile-card">
+
+    <h2>{% icon "lock" size=20 %} Seguridad</h2>
+
+    <p>
+        Gestiona la seguridad de tu cuenta y actualiza tu contraseña cuando sea necesario.
+    </p>
+
+    <div class="profile-actions">
+
+        <a
+            href="{% url 'password_reset' %}"
+            class="btn-primary">
+
+            Cambiar Contraseña
+
+        </a>
+
+    </div>
+
+</div>
+
+</div>
+
+{% endblock %}

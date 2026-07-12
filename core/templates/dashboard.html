@@ -1,0 +1,160 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+{% load text_format %}
+
+{% block title %}Dashboard - TributIA{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    {# ── Bienvenida ── #}
+    <header class="welcome-card">
+        <h1>Bienvenido, {{ request.user.first_name|default:request.user.username|title }}</h1>
+        <p>Centro de control TributIA — Gestiona tus documentos tributarios</p>
+    </header>
+
+    {# ── KPIs financieros ── #}
+    <section class="db-kpi-grid">
+
+        <div class="db-kpi db-kpi--green">
+            <div class="db-kpi__icon">{% icon "dollar-sign" size=20 %}</div>
+            <div class="db-kpi__value">${{ total_facturado|floatformat:2 }}</div>
+            <div class="db-kpi__label">Total Facturado</div>
+            <div class="db-kpi__sub">Suma de todos los documentos analizados</div>
+        </div>
+
+        <div class="db-kpi db-kpi--blue">
+            <div class="db-kpi__icon">{% icon "percent" size=20 %}</div>
+            <div class="db-kpi__value">${{ total_iva|floatformat:2 }}</div>
+            <div class="db-kpi__label">IVA Acumulado</div>
+            <div class="db-kpi__sub">IVA detectado en documentos</div>
+        </div>
+
+        <div class="db-kpi db-kpi--purple">
+            <div class="db-kpi__icon">{% icon "shield-check" size=20 %}</div>
+            <div class="db-kpi__value">${{ total_deducible_monto|floatformat:2 }}</div>
+            <div class="db-kpi__label">Total Deducible</div>
+            <div class="db-kpi__sub">Subtotal de documentos deducibles</div>
+        </div>
+
+        <div class="db-kpi db-kpi--default">
+            <div class="db-kpi__icon">{% icon "file-text" size=20 %}</div>
+            <div class="db-kpi__value">{{ total_analizados }}<span class="db-kpi__denom"> / {{ total_documentos }}</span></div>
+            <div class="db-kpi__label">Documentos Analizados</div>
+            <div class="db-kpi__sub">{{ total_tributarios }} tributarios · {{ total_deducibles }} deducibles</div>
+        </div>
+
+    </section>
+
+    {# ── Consejo inteligente ── #}
+    {% if consejo %}
+    <div class="db-consejo db-consejo--{{ consejo.tipo }}">
+        <div class="db-consejo__icon">{% icon consejo.icono size=22 %}</div>
+        <div class="db-consejo__body">
+            <strong class="db-consejo__titulo">{{ consejo.titulo }}</strong>
+            <p class="db-consejo__mensaje">{{ consejo.mensaje }}</p>
+        </div>
+        {% if consejo.accion_url %}
+        <a href="{% url consejo.accion_url %}" class="db-consejo__btn">
+            {{ consejo.accion_texto }} →
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Alerta de pendientes ── #}
+    {% if total_pendientes > 0 %}
+    <div class="db-alert">
+        {% icon "triangle-alert" size=18 %}
+        <span>
+            Tienes <strong>{{ total_pendientes }} documento{{ total_pendientes|pluralize }}</strong> sin analizar.
+        </span>
+        {% if primer_pendiente %}
+        <a href="{% url 'detalle_documento' primer_pendiente.id %}" class="db-alert__btn">
+            Analizar ahora →
+        </a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Fila: próximos eventos + recomendación ── #}
+    <div class="db-row">
+
+        {# Próximos eventos #}
+        <section class="db-card db-card--events">
+            <div class="db-card__head">
+                {% icon "calendar" size=18 %}
+                <h2>Próximas Fechas</h2>
+                <a href="{% url 'calendario' %}" class="db-card__link">Ver calendario →</a>
+            </div>
+
+            {% if proximos_eventos %}
+            <ul class="db-events-list">
+                {% for ev in proximos_eventos %}
+                <li class="db-event db-event--{{ ev.tipo }}">
+                    <span class="db-event__date">{{ ev.fecha|date:"d M" }}</span>
+                    <span class="db-event__title">{{ ev.titulo }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="db-empty">No hay eventos próximos.</p>
+            {% endif %}
+        </section>
+
+        {# Recomendación IA #}
+        <section class="db-card db-card--rec">
+            <div class="db-card__head">
+                {% icon "sparkles" size=18 %}
+                <h2>Recomendación IA</h2>
+            </div>
+
+            {% if ultimo_analisis %}
+            <p class="db-rec__doc">
+                <small>Basado en: <strong>{{ ultimo_analisis.documento.nombre }}</strong></small>
+            </p>
+            <div class="callout callout-success db-rec__callout">
+                {{ ultimo_analisis.recomendacion_ia|gemini_format|truncatewords_html:35 }}
+            </div>
+            <a href="{% url 'detalle_documento' ultimo_analisis.documento.id %}" class="btn-primary mt-3">
+                {% icon "eye" size=16 %} Ver análisis completo
+            </a>
+            {% elif total_analizados > 0 %}
+            <p class="db-empty">Documentos analizados, pero sin recomendación disponible aún.</p>
+            {% else %}
+            <p class="db-empty">Sube una constancia salarial, declaración o factura para ver recomendaciones automáticas.</p>
+            {% endif %}
+        </section>
+
+    </div>
+
+    {# ── Acceso rápido ── #}
+    <section class="modules-section">
+        <h2>Acceso Rápido</h2>
+        <div class="dashboard-grid">
+
+            <a href="{% url 'documentos' %}" class="dashboard-card dashboard-link">
+                <h3>{% icon "file-text" size=18 %} Documentos</h3>
+                <p>Carga, visualiza y gestiona tus documentos tributarios</p>
+            </a>
+
+            <a href="{% url 'asistente_ia' %}" class="dashboard-card dashboard-link">
+                <h3>{% icon "bot" size=18 %} Asistente IA</h3>
+                <p>Consulta con nuestro asistente tributario inteligente</p>
+            </a>
+
+            <a href="{% url 'centro_analisis' %}" class="dashboard-card dashboard-link">
+                <h3>{% icon "chart-bar" size=18 %} Centro de Análisis</h3>
+                <p>Estadísticas y análisis completo de tus documentos</p>
+            </a>
+
+            <a href="{% url 'calendario' %}" class="dashboard-card dashboard-link">
+                <h3>{% icon "calendar" size=18 %} Calendario Fiscal</h3>
+                <p>Fechas importantes, recordatorios y vencimientos</p>
+            </a>
+
+        </div>
+    </section>
+
+</div>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+
+{% block title %}
+Editar Perfil
+{% endblock %}
+
+{% block content %}
+
+<div class="form-card">
+
+    <h1>{% icon "user" size=22 %} Editar Perfil Tributario</h1>
+
+    <form method="POST">
+
+        {% csrf_token %}
+
+        <div class="form-group">
+            <label for="id_dui">DUI</label>
+            {{ form.dui }}
+            {% if form.dui.errors %}<span class="field-error">{{ form.dui.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="id_nit">NIT</label>
+            {{ form.nit }}
+            {% if form.nit.errors %}<span class="field-error">{{ form.nit.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="id_telefono">Teléfono</label>
+            {{ form.telefono }}
+            {% if form.telefono.errors %}<span class="field-error">{{ form.telefono.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="id_salario_mensual">Salario mensual</label>
+            {{ form.salario_mensual }}
+            {% if form.salario_mensual.errors %}<span class="field-error">{{ form.salario_mensual.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="id_actividad_economica">Actividad económica</label>
+            {{ form.actividad_economica }}
+            {% if form.actividad_economica.errors %}<span class="field-error">{{ form.actividad_economica.errors.0 }}</span>{% endif %}
+        </div>
+
+        <div class="form-group">
+            <label for="id_tipo_contribuyente">Tipo de contribuyente</label>
+            {{ form.tipo_contribuyente }}
+            {% if form.tipo_contribuyente.errors %}<span class="field-error">{{ form.tipo_contribuyente.errors.0 }}</span>{% endif %}
+        </div>
+
+        <button
+            type="submit"
+            class="btn-primary btn-full">
+
+            {% icon "circle-check" size=16 %} Guardar Cambios
+
+        </button>
+
+    </form>
+
+</div>
+
+{% endblock %}

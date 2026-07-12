@@ -1,0 +1,93 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+
+{% block title %}Recursos Fiscales — TributIA{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    <header class="welcome-card">
+        <h1>{% icon "book-open" size=24 %} Recursos Fiscales</h1>
+        <p>Formularios del Ministerio de Hacienda de El Salvador y documentos requeridos para cada trámite.</p>
+    </header>
+
+    {# ── Aviso legal ── #}
+    <div class="aviso-legal">
+        <div class="aviso-legal__icono">{% icon "triangle-alert" size=22 %}</div>
+        <div class="aviso-legal__body">
+            <strong>Aviso importante — Solo orientación, no asesoría profesional</strong>
+            <p>
+                La información presentada en esta sección es de carácter <strong>educativo y orientativo</strong>.
+                TributIA no reemplaza la asesoría de un contador público certificado, auditor o asesor tributario.
+                Las leyes fiscales cambian; siempre verifica la información vigente directamente con el
+                <strong>Ministerio de Hacienda de El Salvador</strong> o con un profesional calificado antes de
+                presentar cualquier declaración o trámite.
+            </p>
+        </div>
+    </div>
+
+    {# ── Acceso directo al portal ── #}
+    <div class="portal-card">
+        <div class="portal-card__left">
+            {% icon "landmark" size=32 %}
+            <div>
+                <strong>Portal Tributario — Ministerio de Hacienda</strong>
+                <p>Presenta tus formularios en línea, consulta el estado de tus trámites y descarga documentos oficiales.</p>
+            </div>
+        </div>
+        <a href="https://www.mh.gob.sv/" target="_blank" rel="noopener noreferrer" class="portal-card__btn">
+            {% icon "external-link" size=15 %} Ir al sitio oficial
+        </a>
+    </div>
+
+    {# ── Formularios ── #}
+    <h2 class="recursos-titulo">{% icon "file-check" size=20 %} Formularios principales</h2>
+
+    <div class="formularios-grid">
+        {% for f in formularios %}
+        <div class="form-card">
+
+            <div class="form-card__header">
+                <span class="form-card__codigo">{{ f.codigo }}</span>
+                <div class="form-card__icono">{% icon f.icono size=20 %}</div>
+            </div>
+
+            <h3 class="form-card__nombre">{{ f.nombre }}</h3>
+
+            <div class="form-card__periodo">
+                {% icon "clock" size=13 %} {{ f.periodicidad }}
+            </div>
+
+            <p class="form-card__desc">{{ f.descripcion }}</p>
+
+            <div class="form-card__docs">
+                <strong>{% icon "file-text" size=13 %} Documentos requeridos</strong>
+                <ul>
+                    {% for doc in f.documentos %}
+                    <li>{{ doc }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
+            {% if f.url %}
+            <a href="{{ f.url }}" target="_blank" rel="noopener noreferrer" class="form-card__link">
+                {% icon "external-link" size=13 %} {{ f.url_label }}
+            </a>
+            {% endif %}
+
+        </div>
+        {% endfor %}
+    </div>
+
+    {# ── Aviso final ── #}
+    <div class="aviso-final">
+        {% icon "info" size=16 %}
+        <p>
+            ¿Tienes dudas sobre cuál formulario necesitas o qué documentos aplican a tu caso?
+            Consulta a nuestro <a href="{% url 'asistente_ia' %}">Asistente IA</a> o a un
+            contador certificado en El Salvador.
+        </p>
+    </div>
+
+</div>
+{% endblock %}

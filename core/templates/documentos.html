@@ -1,0 +1,156 @@
+{% extends 'base_dashboard.html' %}
+{% load static %}
+{% load icons %}
+
+{% block title %}
+Documentos
+{% endblock %}
+
+{% block content %}
+
+<div class="container">
+
+    {% if messages %}
+    <div class="doc-messages">
+        {% for msg in messages %}
+        <div class="doc-msg doc-msg--{{ msg.tags }}">
+            {% if msg.tags == 'warning' %}{% icon "triangle-alert" size=16 %}
+            {% elif msg.tags == 'success' %}{% icon "circle-check" size=16 %}
+            {% else %}{% icon "info" size=16 %}{% endif %}
+            {{ msg }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="profile-card">
+
+        <h1>{% icon "file-text" size=24 %} Mis Documentos</h1>
+
+        <form method="POST"
+              enctype="multipart/form-data"
+              id="upload-form">
+
+            {% csrf_token %}
+
+            <div class="form-group">
+                <label for="id_nombre">Nombre del documento</label>
+                {{ form.nombre }}
+            </div>
+
+            <label for="id_archivo" class="upload-trigger" id="upload-trigger">
+                {% icon "cloud-upload" size=32 %}
+                <span>Haz clic para seleccionar un archivo</span>
+                <small>PDF, JPG o PNG &middot; máximo 20MB</small>
+            </label>
+            {{ form.archivo }}
+
+            <div class="file-preview-card" id="file-preview" hidden>
+                <span class="file-preview-icon">{% icon "file-text" size=28 %}</span>
+                <div class="file-preview-meta">
+                    <strong id="file-preview-name"></strong>
+                    <small id="file-preview-size"></small>
+                </div>
+                <button type="button" class="file-preview-remove" id="file-preview-remove" aria-label="Quitar archivo">
+                    {% icon "x" size=18 %}
+                </button>
+            </div>
+
+            <button
+                type="submit"
+                class="btn-primary btn-full"
+                id="upload-submit">
+
+                {% icon "cloud-upload" size=16 %} Subir Documento
+
+            </button>
+
+        </form>
+
+    </div>
+
+    <div class="profile-card">
+
+        <h2>Documentos Cargados</h2>
+
+        {% for doc in documentos %}
+
+            <div class="document-card">
+
+                <div class="document-card-header">
+                    {% icon "file-text" size=18 %}
+                    <h3>{{ doc.nombre }}</h3>
+                    <span class="status-pill status-pill--{{ doc.estado }}">{{ doc.get_estado_display }}</span>
+                </div>
+
+                <p>{% icon "calendar" size=14 %} {{ doc.fecha_subida }}</p>
+
+                <div class="document-actions">
+
+                    {% if doc.archivo %}
+                    <a
+                        href="{{ doc.archivo.url }}"
+                        target="_blank"
+                        class="btn-secondary">
+
+                        {% icon "eye" size=16 %} Ver Archivo
+
+                    </a>
+                    {% endif %}
+
+                    <a
+                        href="{% url 'detalle_documento' doc.id %}"
+                        class="btn-primary">
+
+                        {% icon "search" size=16 %} Ver Análisis
+
+                    </a>
+
+                    <form method="POST"
+                          action="{% url 'eliminar_documento' doc.id %}"
+                          style="display:inline"
+                          onsubmit="return confirm('¿Eliminar este documento y su análisis? Esta acción no se puede deshacer.')">
+                        {% csrf_token %}
+                        <button type="submit" class="btn-danger">
+                            {% icon "trash-2" size=16 %} Eliminar
+                        </button>
+                    </form>
+
+                </div>
+
+            </div>
+
+        {% empty %}
+
+            <p>
+                No hay documentos cargados.
+            </p>
+
+        {% endfor %}
+
+    </div>
+
+    {% if page_obj.paginator.num_pages > 1 %}
+    <div class="pagination-bar">
+        {% if page_obj.has_previous %}
+            <a href="?page={{ page_obj.previous_page_number }}" class="page-btn">← Anterior</a>
+        {% endif %}
+        <span class="page-info">Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}
+            <a href="?page={{ page_obj.next_page_number }}" class="page-btn">Siguiente →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+</div>
+
+<div class="loading-overlay" id="loading-overlay">
+    <div class="spinner"></div>
+    <p>Analizando documento…</p>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/documentos.js' %}" defer></script>
+{% endblock %}

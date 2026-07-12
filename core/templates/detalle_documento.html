@@ -1,0 +1,259 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+{% load text_format %}
+
+{% block title %}
+Análisis Documento
+{% endblock %}
+
+{% block content %}
+
+<div class="container">
+
+    <!-- CABECERA -->
+
+    <div class="profile-card">
+
+        <h1>{% icon "file-text" size=24 %} {{ documento.nombre }}</h1>
+
+        <p>
+            Estado:
+            <strong>{{ documento.get_estado_display }}</strong>
+        </p>
+
+        <p>
+            Fecha de carga:
+            {{ documento.fecha_subida }}
+        </p>
+
+        {% if documento.archivo %}
+        <a
+            href="{{ documento.archivo.url }}"
+            target="_blank"
+            class="btn-primary">
+
+            {% icon "eye" size=16 %} Abrir Documento
+
+        </a>
+        {% endif %}
+
+    </div>
+
+    {% if analisis %}
+
+    <!-- DATOS DETECTADOS -->
+
+    <div class="profile-card">
+
+        <h2>{% icon "search" size=20 %} Información Detectada</h2>
+
+        <div class="info-grid">
+
+            <div class="info-item">
+                <strong>{% icon "building-2" size=14 %} Empresa</strong>
+                <p>{{ analisis.nombre_empresa|default:"No detectada" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "user" size=14 %} Cliente</strong>
+                <p>{{ analisis.nombre_cliente|default:"No detectado" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "calendar" size=14 %} Fecha Documento</strong>
+                <p>{{ analisis.fecha_documento|default:"No detectada" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "hash" size=14 %} Número Documento</strong>
+                <p>{{ analisis.numero_documento|default:"No detectado" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "clipboard-list" size=14 %} Tipo Documento</strong>
+                <p>{{ analisis.tipo_documento_detectado|default:"No detectado" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "map-pin" size=14 %} Dirección</strong>
+                <p>{{ analisis.direccion_detectada|default:"No detectada" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "hash" size=14 %} NIT Tradicional</strong>
+                <p>{{ analisis.nit_tradicional|default:"No detectado" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "credit-card" size=14 %} DUI / NIT Homologado</strong>
+                <p>{{ analisis.identificador_homologado|default:"No detectado" }}</p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- RESUMEN GENERADO POR IA -->
+
+    {% if analisis.resumen_ia %}
+
+    <div class="profile-card">
+
+        <h2>{% icon "brain" size=20 %} Resumen Inteligente</h2>
+
+        <div class="callout callout-info">
+            {{ analisis.resumen_ia|gemini_format }}
+        </div>
+
+    </div>
+
+    {% endif %}
+
+    <!-- CLASIFICACIÓN TRIBUTARIA -->
+
+    <div class="profile-card">
+
+        <h2>{% icon "clipboard-list" size=20 %} Clasificación Tributaria</h2>
+
+        <div class="info-grid">
+
+            <div class="info-item">
+                <strong>{% icon "building-2" size=14 %} Documento Tributario</strong>
+                <p>
+                    {% if analisis.es_documento_tributario is True %}
+                        <span class="status-pill status-pill--analizado">{% icon "circle-check" size=14 %} Sí</span>
+                    {% elif analisis.es_documento_tributario is False %}
+                        <span class="status-pill status-pill--pendiente">{% icon "x" size=14 %} No</span>
+                    {% else %}
+                        <span class="status-pill status-pill--pendiente">No determinado</span>
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "dollar-sign" size=14 %} Deducible</strong>
+                <p>
+                    {% if analisis.es_deducible is True %}
+                        <span class="status-pill status-pill--analizado">{% icon "circle-check" size=14 %} Sí</span>
+                    {% elif analisis.es_deducible is False %}
+                        <span class="status-pill status-pill--pendiente">{% icon "x" size=14 %} No</span>
+                    {% else %}
+                        <span class="status-pill status-pill--pendiente">No determinado</span>
+                    {% endif %}
+                </p>
+            </div>
+
+        </div>
+
+        {% if analisis.justificacion_deducible %}
+            <div class="callout callout-info mt-3">
+                {{ analisis.justificacion_deducible|gemini_format }}
+            </div>
+        {% endif %}
+
+    </div>
+
+    <!-- RESUMEN FISCAL -->
+
+    <div class="profile-card">
+
+        <h2>{% icon "dollar-sign" size=20 %} Resumen Fiscal</h2>
+
+        <div class="info-grid">
+
+            <div class="info-item">
+                <strong>Subtotal</strong>
+                <p>${{ analisis.subtotal|default:"0.00" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>IVA</strong>
+                <p>${{ analisis.iva|default:"0.00" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>Otros Cargos</strong>
+                <p>${{ analisis.otros_cargos|default:"0.00" }}</p>
+            </div>
+
+            <div class="info-item">
+                <strong>Total</strong>
+                <p class="fiscal-total">${{ analisis.total|default:"0.00" }}</p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- RECOMENDACION IA -->
+
+    <div class="profile-card">
+
+        <h2>{% icon "bot" size=20 %} Recomendación TributIA</h2>
+
+        <div class="callout callout-success">
+            {% if analisis.recomendacion_ia %}
+                {{ analisis.recomendacion_ia|gemini_format }}
+            {% else %}
+                <p>No hay recomendaciones disponibles.</p>
+            {% endif %}
+        </div>
+
+    </div>
+
+    <!-- DATOS DEL ANÁLISIS -->
+
+    <div class="profile-card">
+
+        <h2>{% icon "chart-bar" size=20 %} Información del Análisis</h2>
+
+        <div class="info-grid">
+
+            <div class="info-item">
+                <strong>{% icon "percent" size=13 %} Confianza</strong>
+                <p>
+                    {% widthratio analisis.confianza_clasificacion 1 100 %}%
+                    {% if analisis.confianza_clasificacion >= 0.7 %}
+                        <span class="conf-badge conf-badge--alta">Alta</span>
+                    {% elif analisis.confianza_clasificacion >= 0.4 %}
+                        <span class="conf-badge conf-badge--media">Media</span>
+                    {% else %}
+                        <span class="conf-badge conf-badge--baja">Baja</span>
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="info-item">
+                <strong>{% icon "clock" size=13 %} Fecha Análisis</strong>
+                <p>{{ analisis.fecha_analisis|date:"d/m/Y H:i" }}</p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- TEXTO OCR -->
+
+    <div class="profile-card">
+
+        <h2>{% icon "file-text" size=20 %} Texto Extraído (OCR)</h2>
+
+        <textarea
+            readonly
+            class="ocr-textarea">{{ analisis.texto_extraido }}</textarea>
+
+    </div>
+
+    {% else %}
+
+    <div class="profile-card">
+
+        <h2>{% icon "triangle-alert" size=20 %} No existe análisis para este documento.</h2>
+
+    </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

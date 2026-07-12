@@ -1,0 +1,262 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+
+{% block title %}Calendario Fiscal — TributIA{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    <!-- Encabezado -->
+    <div class="profile-card">
+        <h1>{% icon "calendar" size=24 %} Calendario Fiscal</h1>
+        <p>Visualiza fechas fiscales importantes, guarda facturas y crea recordatorios personalizados.</p>
+    </div>
+
+    <!-- Layout principal: calendario + barra lateral -->
+    <div class="cal-layout">
+
+        <!-- CALENDARIO PRINCIPAL -->
+        <div class="cal-main profile-card" style="padding:20px">
+
+            <!-- Buscador por fecha -->
+            <div class="cal-search">
+                {% icon "search" size=15 %}
+                <input type="date" id="cal-date-input" class="cal-search__input"
+                       title="Ir a una fecha específica"
+                       value="{% if dia_buscado %}{{ year }}-{{ month|stringformat:'02d' }}-{{ dia_buscado|stringformat:'02d' }}{% endif %}">
+                <span class="cal-search__hint">Ir a fecha</span>
+            </div>
+
+            <!-- Navegación de mes -->
+            <div class="cal-header">
+                <a href="?year={{ prev_year }}&month={{ prev_month }}" class="cal-nav-btn" title="Mes anterior">
+                    {% icon "chevron-left" size=18 %}
+                </a>
+                <div class="cal-titulo-mes">
+                    <h2>{{ month_name }} {{ year }}</h2>
+                    {% if year != today.year or month != today.month %}
+                        <a href="?year={{ today.year }}&month={{ today.month }}" class="cal-hoy-link">Hoy</a>
+                    {% endif %}
+                </div>
+                <a href="?year={{ next_year }}&month={{ next_month }}" class="cal-nav-btn" title="Mes siguiente">
+                    {% icon "chevron-right" size=18 %}
+                </a>
+            </div>
+
+            <!-- Cabecera días de la semana -->
+            <div class="cal-weekdays">
+                <span>Dom</span><span>Lun</span><span>Mar</span>
+                <span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span>
+            </div>
+
+            <!-- Grilla de días -->
+            <div class="cal-grid">
+                {% for semana in semanas %}
+                    {% for dia in semana %}
+                        {% if dia %}
+                            <div class="cal-day{% if dia.is_today %} cal-day--today{% endif %}{% if dia.is_past %} cal-day--past{% endif %}{% if dia_buscado and dia.day == dia_buscado %} cal-day--buscado{% endif %}"
+                                 data-date="{{ year }}-{{ month|stringformat:'02d' }}-{{ dia.day|stringformat:'02d' }}"
+                                 title="Agregar evento">
+                                <div class="cal-day-num">{{ dia.day }}</div>
+                                {% for ev in dia.eventos %}
+                                    <div class="cal-event cal-event--{{ ev.tipo }}" title="{{ ev.titulo }}">
+                                        {{ ev.titulo|truncatechars:22 }}
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="cal-day cal-day--empty"></div>
+                        {% endif %}
+                    {% endfor %}
+                {% endfor %}
+            </div>
+
+            <!-- Leyenda -->
+            <div class="cal-leyenda">
+                <span class="leyenda-item leyenda-item--fiscal">{% icon "circle" size=8 %} Fiscal</span>
+                <span class="leyenda-item leyenda-item--recordatorio">{% icon "circle" size=8 %} Recordatorio</span>
+                <span class="leyenda-item leyenda-item--factura">{% icon "circle" size=8 %} Factura</span>
+                <span class="leyenda-item leyenda-item--vencimiento">{% icon "circle" size=8 %} Vencimiento</span>
+            </div>
+        </div>
+
+        <!-- BARRA LATERAL -->
+        <aside class="cal-sidebar">
+
+            <button class="btn-primary btn-full" id="btn-agregar-evento">
+                {% icon "plus" size=16 %} Agregar evento
+            </button>
+
+            <div class="profile-card" style="margin-top:16px; padding:16px">
+                <h3 style="font-size:15px; margin-bottom:12px; color:var(--text-primary)">
+                    {% icon "list" size=16 %} Eventos — {{ month_name }}
+                </h3>
+
+                {% if eventos_mes %}
+                    <div class="eventos-lista">
+                        {% for ev in eventos_mes %}
+                            <div class="sidebar-evento sidebar-evento--{{ ev.tipo }}">
+                                <div class="sidebar-evento-fecha">{{ ev.fecha|date:"d/m" }}</div>
+                                <div class="sidebar-evento-info">
+                                    <span class="sidebar-evento-titulo">{{ ev.titulo }}</span>
+                                    <span class="sidebar-evento-tipo">{{ ev.get_tipo_display }}</span>
+                                    {% if ev.descripcion %}
+                                        <span class="sidebar-evento-desc">{{ ev.descripcion|truncatechars:60 }}</span>
+                                    {% endif %}
+                                </div>
+                                <form method="POST" action="{% url 'eliminar_evento' ev.id %}" style="flex-shrink:0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn-del-evento" title="Eliminar"
+                                            onclick="return confirm('¿Eliminar este evento?')">
+                                        {% icon "x" size=13 %}
+                                    </button>
+                                </form>
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p style="font-size:13px; color:var(--text-secondary); text-align:center; padding:16px 0">
+                        Sin eventos guardados este mes.<br>
+                        <small>Haz clic en un día o usa "Agregar evento".</small>
+                    </p>
+                {% endif %}
+            </div>
+
+        </aside>
+    </div>
+
+    <!-- TASAS VIGENTES -->
+    <div class="profile-card">
+        <h2>{% icon "calculator" size=20 %} Tasas y Límites Vigentes</h2>
+        <div class="rates-grid">
+            {% for tasa in tasas %}
+            <div class="rate-card">
+                <div class="rate-card__label">{{ tasa.label }}</div>
+                <div class="rate-card__value">{{ tasa.valor }}</div>
+                <div class="rate-card__note">{{ tasa.nota }}</div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- TABLA ISR -->
+    <div class="profile-card">
+        <h2>{% icon "clipboard-list" size=20 %} Tabla ISR Personas Naturales</h2>
+        <div class="info-grid">
+            <div class="info-item"><strong>Hasta $50,000</strong><p>Exento (0%)</p></div>
+            <div class="info-item"><strong>$50,001 – $156,000</strong><p>5% sobre el exceso de $50,000</p></div>
+            <div class="info-item"><strong>$156,001 – $300,000</strong><p>10% sobre el exceso de $156,000</p></div>
+            <div class="info-item"><strong>Más de $300,000</strong><p>30% sobre el exceso de $300,000</p></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- MODAL: AGREGAR EVENTO -->
+<div class="modal-overlay" id="modal-overlay">
+    <div class="modal-card">
+        <div class="modal-header">
+            <h3>{% icon "calendar-plus" size=18 %} Nuevo evento</h3>
+            <button class="modal-close" id="btn-cerrar-modal" title="Cerrar">{% icon "x" size=18 %}</button>
+        </div>
+
+        <form method="POST" action="{% url 'crear_evento' %}">
+            {% csrf_token %}
+            <input type="hidden" name="year"  value="{{ year }}">
+            <input type="hidden" name="month" value="{{ month }}">
+
+            <div class="form-group">
+                <label for="ev-titulo">Título <span style="color:var(--danger-red)">*</span></label>
+                <input type="text" id="ev-titulo" name="titulo" class="input-modern"
+                       placeholder="Ej: Factura Proveedor ABC" required maxlength="200">
+            </div>
+
+            <div class="form-group">
+                <label for="ev-fecha">Fecha <span style="color:var(--danger-red)">*</span></label>
+                <input type="date" id="ev-fecha" name="fecha" class="input-modern" required>
+            </div>
+
+            <div class="form-group">
+                <label for="ev-tipo">Tipo</label>
+                <select id="ev-tipo" name="tipo" class="input-modern">
+                    <option value="recordatorio">Recordatorio</option>
+                    <option value="factura">Factura</option>
+                    <option value="vencimiento">Vencimiento</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="ev-desc">
+                    Descripción
+                    <span style="color:var(--text-secondary); font-weight:400">(opcional)</span>
+                </label>
+                <textarea id="ev-desc" name="descripcion" class="input-modern" rows="2"
+                          placeholder="Notas adicionales..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="btn-cancelar-modal">Cancelar</button>
+                <button type="submit" class="btn-primary">{% icon "check" size=14 %} Guardar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    // Buscador por fecha: navega al mes correcto y resalta el día
+    const calDateInput = document.getElementById('cal-date-input');
+    if (calDateInput) {
+        calDateInput.addEventListener('change', function () {
+            const val = this.value; // YYYY-MM-DD
+            if (!val) return;
+            const [y, m, d] = val.split('-');
+            window.location.href = `?year=${y}&month=${parseInt(m)}&dia=${parseInt(d)}`;
+        });
+    }
+
+    // Si hay un día buscado, hacer scroll hasta él
+    const diaBuscado = document.querySelector('.cal-day--buscado');
+    if (diaBuscado) {
+        diaBuscado.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    const overlay    = document.getElementById('modal-overlay');
+    const fechaInput = document.getElementById('ev-fecha');
+
+    function abrirModal(fecha) {
+        overlay.classList.add('is-open');
+        if (fecha) fechaInput.value = fecha;
+        document.getElementById('ev-titulo').focus();
+    }
+
+    function cerrarModal() {
+        overlay.classList.remove('is-open');
+    }
+
+    document.getElementById('btn-agregar-evento').addEventListener('click', function () {
+        abrirModal(null);
+    });
+    document.getElementById('btn-cerrar-modal').addEventListener('click', cerrarModal);
+    document.getElementById('btn-cancelar-modal').addEventListener('click', cerrarModal);
+
+    overlay.addEventListener('click', function (e) {
+        if (e.target === overlay) cerrarModal();
+    });
+
+    document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && overlay.classList.contains('is-open')) cerrarModal();
+    });
+
+    // Clic en cualquier día → pre-llenar fecha en el modal
+    document.querySelectorAll('.cal-day:not(.cal-day--empty)').forEach(function (cell) {
+        cell.addEventListener('click', function () {
+            abrirModal(this.dataset.date);
+        });
+    });
+})();
+</script>
+{% endblock %}

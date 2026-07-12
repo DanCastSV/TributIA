@@ -1,0 +1,70 @@
+{% load static %}
+{% load icons %}
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Dashboard - TributIA">
+    <meta name="theme-color" content="#059669">
+
+    <title>{% block title %}Dashboard - TributIA{% endblock %}</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+</head>
+
+<body>
+    <div class="app-layout">
+        <aside class="sidebar" role="navigation" aria-label="Menú lateral">
+            <div class="sidebar-logo">
+                <div class="logo-icon">T</div>
+                <h2>TributIA</h2>
+            </div>
+
+            <nav class="sidebar-nav">
+                <a href="{% url 'dashboard' %}" title="Ir al dashboard">
+                    {% icon "house" size=18 %} <span>Dashboard</span>
+                </a>
+                <a href="{% url 'perfil' %}" title="Ver mi perfil">
+                    {% icon "user" size=18 %} <span>Mi Perfil</span>
+                </a>
+                <a href="{% url 'documentos' %}" title="Gestionar documentos">
+                    {% icon "file-text" size=18 %} <span>Documentos</span>
+                </a>
+                <a href="{% url 'asistente_ia' %}" title="Abrir asistente IA">
+                    {% icon "bot" size=18 %} <span>Asistente IA</span>
+                </a>
+                <a href="{% url 'calendario' %}" title="Ver calendario fiscal">
+                    {% icon "calendar" size=18 %} <span>Calendario</span>
+                </a>
+                <a href="{% url 'centro_analisis' %}" title="Ver análisis">
+                    {% icon "chart-bar" size=18 %} <span>Centro de Análisis</span>
+                </a>
+                <a href="{% url 'recursos_fiscales' %}" title="Formularios y recursos fiscales">
+                    {% icon "book-open" size=18 %} <span>Recursos Fiscales</span>
+                </a>
+            </nav>
+
+            <div class="sidebar-footer">
+                <form action="{% url 'logout' %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="logout-sidebar" title="Cerrar sesión">
+                        {% icon "log-out" size=16 %} Cerrar Sesión
+                    </button>
+                </form>
+            </div>
+        </aside>
+
+        <main class="main-content" role="main">
+            {% block content %}
+            {% endblock %}
+        </main>
+    </div>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,63 @@
+{% extends 'base_public.html' %}
+{% load icons %}
+
+{% block title %}TributIA - Gestión Tributaria con IA{% endblock %}
+
+{% block content %}
+
+<section class="hero" role="banner">
+    <div class="hero-content">
+        <span class="hero-badge" aria-label="Distintivo: Plataforma Inteligente">
+            {% icon "rocket" size=14 %} Plataforma Inteligente Tributaria
+        </span>
+
+        <h1>Gestiona tus obligaciones tributarias <span class="primary">con Inteligencia Artificial</span></h1>
+
+        <p>Analiza documentos automáticamente, detecta información tributaria, recibe recomendaciones y centraliza toda tu información fiscal en un solo lugar.</p>
+
+        <div class="hero-buttons">
+            <a href="{% url 'registro' %}" class="btn-primary" role="button">
+                {% icon "sparkles" size=16 %} Comenzar Gratis
+            </a>
+            <a href="{% url 'login' %}" class="btn-secondary" role="button">
+                Iniciar Sesión
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="features" aria-labelledby="features-title">
+    <h2 id="features-title" class="hidden">Características Principales</h2>
+
+    <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">{% icon "file-text" size=40 %}</div>
+        <h3>Análisis de Documentos</h3>
+        <p>Extrae automáticamente texto, NIT, DUI y montos relevantes desde documentos tributarios con precisión.</p>
+    </article>
+
+    <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">{% icon "bot" size=40 %}</div>
+        <h3>Asistente IA</h3>
+        <p>Resuelve consultas tributarias utilizando inteligencia artificial y contexto documental avanzado.</p>
+    </article>
+
+    <article class="feature-card">
+        <div class="feature-icon" aria-hidden="true">{% icon "chart-bar" size=40 %}</div>
+        <h3>Dashboard Inteligente</h3>
+        <p>Visualiza estadísticas, documentos analizados y recomendaciones personalizadas en tiempo real.</p>
+    </article>
+</section>
+
+<section class="cta-section" aria-labelledby="cta-title">
+    <div class="cta-card">
+        <h2 id="cta-title">Simplifica tu gestión tributaria hoy</h2>
+        <p>Empieza a utilizar TributIA y centraliza toda tu información tributaria en una sola plataforma inteligente.</p>
+        <a href="{% url 'registro' %}" class="btn-primary" role="button">Crear Cuenta Gratis</a>
+    </div>
+</section>
+
+<footer class="footer" role="contentinfo">
+    <p>&copy; 2026 TributIA. Todos los derechos reservados.</p>
+</footer>
+
+{% endblock %}

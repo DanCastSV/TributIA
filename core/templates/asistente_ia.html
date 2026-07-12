@@ -1,0 +1,276 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+{% load text_format %}
+
+{% block title %}Asistente IA TributIA{% endblock %}
+
+{% block content %}
+<div class="asistente-container">
+    <!-- Sidebar con conversaciones -->
+    <aside class="conversaciones-sidebar">
+        <div class="sidebar-header">
+            <h3>Conversaciones</h3>
+            <button id="btn-nueva-conversacion" class="btn-nuevo" title="Nueva conversación">
+                {% icon "plus" size=20 %}
+            </button>
+        </div>
+
+        <div class="conversaciones-list" id="lista-conversaciones">
+            {% for conv in conversaciones %}
+                <div class="conversacion-item {% if conv.id == conversacion.id %}active{% endif %}" id="conv-item-{{ conv.id }}">
+                    <a href="?conversacion_id={{ conv.id }}" class="conversacion-link">
+                        <span class="conversacion-titulo" id="conv-titulo-{{ conv.id }}">{{ conv.titulo|truncatewords:4 }}</span>
+                        <span class="conversacion-fecha">{{ conv.actualizada_en|date:"d/m H:i" }}</span>
+                    </a>
+                    <button class="btn-eliminar-conv" data-conv-id="{{ conv.id }}" title="Eliminar">
+                        {% icon "x" size=14 %}
+                    </button>
+                </div>
+            {% empty %}
+                <p class="sin-conversaciones">Sin conversaciones aún</p>
+            {% endfor %}
+        </div>
+    </aside>
+
+    <!-- Panel principal del chat -->
+    <main class="chat-principal">
+        <div class="chat-header">
+            <h2 id="chat-titulo">
+                {% if conversacion %}{{ conversacion.titulo }}{% else %}{% icon "bot" size=22 %} TributIA{% endif %}
+            </h2>
+            <div class="chat-info">
+                <small>Conversación creada: {{ conversacion.creada_en|date:"d/m/Y H:i" }}</small>
+            </div>
+        </div>
+
+        <!-- Historial de mensajes -->
+        <div class="mensajes-contenedor" id="mensajes-scroll">
+            {% for mensaje in mensajes %}
+                <div class="mensaje {% if mensaje.rol == 'usuario' %}mensaje-usuario{% else %}mensaje-asistente{% endif %}">
+                    <div class="mensaje-header">
+                        {% if mensaje.rol == 'usuario' %}
+                            <strong>{% icon "user" size=14 %} Tú</strong>
+                        {% else %}
+                            <strong>{% icon "bot" size=14 %} Asistente TributIA</strong>
+                        {% endif %}
+                        <span class="mensaje-hora">{{ mensaje.creado_en|date:"H:i" }}</span>
+                    </div>
+                    <div class="mensaje-contenido">
+                        {% if mensaje.rol == 'asistente' %}
+                            {{ mensaje.contenido|gemini_format }}
+                        {% else %}
+                            {{ mensaje.contenido|linebreaks }}
+                        {% endif %}
+                    </div>
+                </div>
+            {% empty %}
+                <div class="mensaje-bienvenida">
+                    <h3>{% icon "sparkles" size=20 %} Bienvenido a TributIA</h3>
+                    <p>Soy tu asistente tributario para El Salvador. Puedo ayudarte con:</p>
+                    <ul>
+                        <li>{% icon "calendar" size=16 %} <strong>Fechas</strong> - Plazos y vencimientos fiscales</li>
+                        <li>{% icon "dollar-sign" size=16 %} <strong>Deducciones</strong> - Gastos deducibles permitidos</li>
+                        <li>{% icon "calculator" size=16 %} <strong>Cálculos</strong> - Impuestos y retenciones</li>
+                        <li>{% icon "clipboard-list" size=16 %} <strong>Declaraciones</strong> - Proceso de presentación</li>
+                    </ul>
+                    <p>¿Cuál es tu pregunta?</p>
+                </div>
+            {% endfor %}
+
+            <!-- Indicador de escritura (oculto por defecto) -->
+            <div class="mensaje mensaje-asistente typing-indicator-wrap" id="typing-indicator" hidden>
+                <div class="mensaje-header">
+                    <strong>{% icon "bot" size=14 %} Asistente TributIA</strong>
+                </div>
+                <div class="mensaje-contenido">
+                    <span class="typing-dots">
+                        <span></span><span></span><span></span>
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Formulario de entrada -->
+        <div class="chat-input-area">
+            <form id="form-pregunta" autocomplete="off" data-conversacion-id="{{ conversacion.id }}">
+                {% csrf_token %}
+                <div class="input-group">
+                    <textarea
+                        id="input-pregunta"
+                        name="pregunta"
+                        placeholder="Escribe tu pregunta tributaria..."
+                        rows="3"
+                        required
+                    ></textarea>
+                    <button type="submit" class="btn-enviar" id="btn-enviar">
+                        Enviar {% icon "send" size=16 %}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const CONVERSACION_ID = parseInt(document.getElementById('form-pregunta').dataset.conversacionId, 10);
+    const CSRF_TOKEN = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    const form        = document.getElementById('form-pregunta');
+    const input       = document.getElementById('input-pregunta');
+    const btnEnviar   = document.getElementById('btn-enviar');
+    const scroll      = document.getElementById('mensajes-scroll');
+    const typing      = document.getElementById('typing-indicator');
+    const chatTitulo  = document.getElementById('chat-titulo');
+
+    // ── Scroll automático ────────────────────────────────────────
+    function scrollAbajo() {
+        scroll.scrollTop = scroll.scrollHeight;
+    }
+    scrollAbajo();
+
+    // ── Crea un elemento de mensaje en el DOM ────────────────────
+    function crearMensaje(rol, contenidoHTML, hora) {
+        const div = document.createElement('div');
+        div.className = 'mensaje ' + (rol === 'usuario' ? 'mensaje-usuario' : 'mensaje-asistente');
+
+        const icono = rol === 'usuario'
+            ? `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
+            : `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="10" x="3" y="11" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>`;
+
+        const nombre = rol === 'usuario' ? 'Tú' : 'Asistente TributIA';
+
+        div.innerHTML = `
+            <div class="mensaje-header">
+                <strong>${icono} ${nombre}</strong>
+                <span class="mensaje-hora">${hora}</span>
+            </div>
+            <div class="mensaje-contenido">${contenidoHTML}</div>
+        `;
+        return div;
+    }
+
+    // ── Convierte markdown básico a HTML (igual que gemini_format) ─
+    function markdownAHtml(texto) {
+        let html = texto
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/(?<!\*)\*([^*\n]+?)\*(?!\*)/g, '<em>$1</em>');
+
+        const lineas = html.split('\n');
+        const partes = [];
+        let enLista = false;
+
+        for (const raw of lineas) {
+            const linea = raw.trim();
+            const liMatch = linea.match(/^[-*•]\s+(.+)/);
+            if (liMatch) {
+                if (!enLista) { partes.push('<ul>'); enLista = true; }
+                partes.push(`<li>${liMatch[1]}</li>`);
+                continue;
+            }
+            if (enLista) { partes.push('</ul>'); enLista = false; }
+            if (!linea) continue;
+            partes.push(`<p>${linea}</p>`);
+        }
+        if (enLista) partes.push('</ul>');
+        return partes.join('');
+    }
+
+    // ── Envío AJAX ───────────────────────────────────────────────
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const pregunta = input.value.trim();
+        if (!pregunta) return;
+
+        // Quitar mensaje de bienvenida si existe
+        const bienvenida = scroll.querySelector('.mensaje-bienvenida');
+        if (bienvenida) bienvenida.remove();
+
+        // Agregar mensaje del usuario
+        const ahora = new Date().toLocaleTimeString('es-SV', { hour: '2-digit', minute: '2-digit' });
+        const msgUsuario = crearMensaje('usuario', pregunta.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'), ahora);
+        scroll.insertBefore(msgUsuario, typing);
+        scrollAbajo();
+
+        // Bloquear UI y mostrar indicador
+        input.value = '';
+        input.disabled = true;
+        btnEnviar.disabled = true;
+        typing.hidden = false;
+        scrollAbajo();
+
+        try {
+            const res = await fetch('/api/chat/mensaje/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': CSRF_TOKEN,
+                },
+                body: JSON.stringify({ pregunta, conversacion_id: CONVERSACION_ID }),
+            });
+
+            const data = await res.json();
+
+            if (data.error) throw new Error(data.error);
+
+            const msgAsistente = crearMensaje('asistente', markdownAHtml(data.respuesta), data.hora);
+            scroll.insertBefore(msgAsistente, typing);
+
+            // Actualizar título del chat y sidebar si cambió
+            if (data.titulo && chatTitulo) {
+                chatTitulo.textContent = data.titulo;
+                const convTitulo = document.getElementById(`conv-titulo-${CONVERSACION_ID}`);
+                if (convTitulo) convTitulo.textContent = data.titulo;
+            }
+
+        } catch (err) {
+            const msgError = crearMensaje('asistente', `<p>Error al obtener respuesta. Intenta de nuevo.</p>`, ahora);
+            scroll.insertBefore(msgError, typing);
+        } finally {
+            typing.hidden = true;
+            input.disabled = false;
+            btnEnviar.disabled = false;
+            input.focus();
+            scrollAbajo();
+        }
+    });
+
+    // ── Enter para enviar (Shift+Enter = nueva línea) ────────────
+    input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            form.dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+    });
+
+    // ── Nueva conversación ───────────────────────────────────────
+    document.getElementById('btn-nueva-conversacion').addEventListener('click', function () {
+        fetch('/api/conversacion/nueva/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': CSRF_TOKEN, 'Content-Type': 'application/json' },
+        })
+        .then(r => r.json())
+        .then(data => { window.location.href = data.url; })
+        .catch(() => alert('Error creando conversación'));
+    });
+
+    // ── Eliminar conversación ────────────────────────────────────
+    document.querySelectorAll('.btn-eliminar-conv').forEach(btn => {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
+            if (!confirm('¿Eliminar esta conversación?')) return;
+            const id = this.dataset.convId;
+            fetch(`/api/conversacion/${id}/eliminar/`, {
+                method: 'DELETE',
+                headers: { 'X-CSRFToken': CSRF_TOKEN },
+            })
+            .then(() => { window.location.href = '/asistente-ia/'; })
+            .catch(() => alert('Error al eliminar'));
+        });
+    });
+})();
+</script>
+{% endblock %}

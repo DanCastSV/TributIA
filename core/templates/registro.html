@@ -1,0 +1,135 @@
+{% extends 'base_public.html' %}
+{% load icons %}
+
+{% block title %}Registro | TributIA{% endblock %}
+
+{% block content %}
+
+<div class="login-wrapper">
+
+    <div class="login-card">
+
+        <div class="login-header">
+            <h1><span class="gradient-text">Crear Cuenta</span></h1>
+            <p>Regístrate para acceder a tu asistente tributario inteligente.</p>
+        </div>
+
+        {% if form.non_field_errors %}
+            <div class="alert-error" role="alert">
+                {% icon "triangle-alert" size=16 %}
+                <strong>{{ form.non_field_errors.0 }}</strong>
+            </div>
+        {% endif %}
+
+        <form method="POST" id="form-registro" novalidate>
+
+            {% csrf_token %}
+
+            <!-- Usuario -->
+            <div class="form-group">
+                <label for="id_username">Usuario</label>
+                {{ form.username }}
+                {% if form.username.errors %}
+                    <span class="field-error">{% icon "circle-x" size=13 %} {{ form.username.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Correo -->
+            <div class="form-group">
+                <label for="id_email">Correo electrónico</label>
+                {{ form.email }}
+                {% if form.email.errors %}
+                    <span class="field-error">{% icon "circle-x" size=13 %} {{ form.email.errors.0 }}</span>
+                {% endif %}
+            </div>
+
+            <!-- Contraseña -->
+            <div class="form-group">
+                <label for="id_password1">Contraseña</label>
+                {{ form.password1 }}
+                {% if form.password1.errors %}
+                    <span class="field-error">{% icon "circle-x" size=13 %} {{ form.password1.errors.0 }}</span>
+                {% endif %}
+
+                <!-- Requisitos de contraseña -->
+                <ul class="password-requirements" id="pwd-requirements">
+                    <li id="req-length">{% icon "circle" size=13 %} Mínimo 8 caracteres</li>
+                    <li id="req-letter">{% icon "circle" size=13 %} Al menos una letra</li>
+                    <li id="req-numeric">{% icon "circle" size=13 %} No puede ser solo números</li>
+                </ul>
+            </div>
+
+            <!-- Confirmar contraseña -->
+            <div class="form-group">
+                <label for="id_password2">Confirmar contraseña</label>
+                {{ form.password2 }}
+                {% if form.password2.errors %}
+                    <span class="field-error">{% icon "circle-x" size=13 %} {{ form.password2.errors.0 }}</span>
+                {% endif %}
+                <span class="field-match" id="pwd-match-msg" hidden></span>
+            </div>
+
+            <button type="submit" class="btn-primary btn-full">
+                {% icon "circle-check" size=16 %} Registrarme
+            </button>
+
+        </form>
+
+        <div class="login-links">
+            <a href="{% url 'login' %}">¿Ya tienes cuenta? Inicia sesión</a>
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const pwd1   = document.getElementById('id_password1');
+    const pwd2   = document.getElementById('id_password2');
+    const matchMsg = document.getElementById('pwd-match-msg');
+
+    const reqs = {
+        length:  document.getElementById('req-length'),
+        letter:  document.getElementById('req-letter'),
+        numeric: document.getElementById('req-numeric'),
+    };
+
+    const CHECK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`;
+    const CIRCLE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>`;
+
+    function setReq(el, ok, text) {
+        el.innerHTML = (ok ? CHECK_SVG : CIRCLE_SVG) + ' ' + text;
+        el.classList.toggle('req-ok', ok);
+        el.classList.toggle('req-pending', !ok);
+    }
+
+    function validarPassword() {
+        if (!pwd1) return;
+        const val = pwd1.value;
+        setReq(reqs.length,  val.length >= 8,           'Mínimo 8 caracteres');
+        setReq(reqs.letter,  /[a-zA-Z]/.test(val),      'Al menos una letra');
+        setReq(reqs.numeric, !/^\d+$/.test(val) || val === '', 'No puede ser solo números');
+    }
+
+    function validarCoincidencia() {
+        if (!pwd2 || !pwd1) return;
+        if (!pwd2.value) { matchMsg.hidden = true; return; }
+        matchMsg.hidden = false;
+        const coincide = pwd1.value === pwd2.value;
+        matchMsg.textContent = coincide ? '✓ Las contraseñas coinciden' : '✗ Las contraseñas no coinciden';
+        matchMsg.className = 'field-match ' + (coincide ? 'match-ok' : 'match-error');
+    }
+
+    if (pwd1) pwd1.addEventListener('input', () => { validarPassword(); validarCoincidencia(); });
+    if (pwd2) pwd2.addEventListener('input', validarCoincidencia);
+
+    // Inicializar si hay valores pre-llenados (por error de validación del servidor)
+    validarPassword();
+    validarCoincidencia();
+})();
+</script>
+{% endblock %}
