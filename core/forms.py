@@ -103,7 +103,7 @@ class DocumentoForm(forms.ModelForm):
             }),
         }
 
-from django.contrib.auth.forms import AuthenticationForm
+from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
 from django import forms
 
 class LoginForm(AuthenticationForm):
@@ -125,3 +125,31 @@ class LoginForm(AuthenticationForm):
             }
         )
     )
+
+class SolicitudResetPasswordForm(PasswordResetForm):
+
+    email = forms.EmailField(
+        widget=forms.EmailInput(attrs={
+            'class': 'input-modern',
+            'placeholder': 'correo@ejemplo.com',
+            'autocomplete': 'email',
+        })
+    )
+
+class NuevaPasswordForm(SetPasswordForm):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['new_password1'].widget.attrs.update({
+            'class': 'input-modern',
+            'placeholder': 'Nueva contraseña',
+            'autocomplete': 'new-password',
+            'id': 'id_new_password1',
+        })
+        self.fields['new_password2'].widget.attrs.update({
+            'class': 'input-modern',
+            'placeholder': 'Confirmar nueva contraseña',
+            'autocomplete': 'new-password',
+            'id': 'id_new_password2',
+        })
+        self.fields['new_password1'].help_text = ''
