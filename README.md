@@ -130,11 +130,14 @@
 tributia_project/
   core/
     models.py
+    admin.py
+    apps.py
     views.py
     urls.py
     forms.py
     datos_el_salvador.py
     ocr_utils.py
+    migrations/
     templatetags/
     services/
       analizador.py
@@ -143,11 +146,15 @@ tributia_project/
       gemini_client.py
       extractor.py
       spacy_processor.py
-    static/css/style.css
+    static/
+      css/style.css
+      js/documentos.js
     templates/
   tributia_project/
     settings.py
     urls.py
+    asgi.py
+    wsgi.py
   docs/
     diagnostico-semana-1.md
     arquitectura-actual.md
@@ -162,6 +169,7 @@ tributia_project/
   README.md
   requirements.txt
   .env.example
+  .gitignore
 ```
 
 **Notas sobre la estructura:**
