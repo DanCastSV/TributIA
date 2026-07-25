@@ -1,11 +1,13 @@
 # TributIA
 
+[![CI](https://github.com/DanCastSV/TributIA/actions/workflows/ci.yml/badge.svg)](https://github.com/DanCastSV/TributIA/actions/workflows/ci.yml)
+
 > Plataforma web de gestión fiscal inteligente para contribuyentes salvadoreños.
 
 ## 1. Información General
 
 **Módulo:** Módulo 4 - Desarrollo de Aplicaciones con IA
-**Semana:** Semana 1 - Diagnóstico y arquitectura inicial
+**Semana:** Semana 3 - Pruebas, automatización y CI/CD
 **Nombre del equipo:** TributIA
 **Equipo:** 11
 **Integrantes:**
@@ -72,11 +74,11 @@
 - Calendario fiscal con eventos manuales y auto-generados al detectar fechas en documentos.
 - Asistente IA multi-turno con contexto del perfil y documentos del usuario.
 - Perfil tributario con barra de progreso de completitud y cálculo real de confianza de clasificación.
+- API interna versionada (`/api/v1/`) con endpoints `/health/`, `/metadata/` y `/analizar-documento/`, documentada en `docs/api.md` (Semana 2).
+- Suite de pruebas automatizadas (22 tests: unitarias de extracción regex, parsing de Gemini y cálculo de confianza, más integración del pipeline completo mockeando OCR/Gemini) con CI en GitHub Actions (Semana 3).
 
 ### Funcionalidades incompletas o pendientes
 
-- API interna versionada para desacoplar el pipeline de análisis de las vistas web (Semana 2).
-- Pruebas automatizadas y CI/CD (Semana 3).
 - Contenedor/despliegue y ejecución asíncrona del pipeline (Semana 4).
 - Logs estructurados, healthcheck y métricas de uso de Gemini (Semana 5).
 
@@ -96,8 +98,8 @@
 | Componente | Descripción | Estado actual |
 |---|---|---|
 | Interfaz | Templates Django (HTML/CSS/JS vanilla, sin frameworks) | Funcional |
-| Backend / lógica principal | Vistas Django (`views.py`) que orquestan todo, sin capa de API separada | Funcional, monolítico |
-| Componente IA | Pipeline OCR → regex → spaCy → Gemini (`core/services/analizador.py`) | Funcional, síncrono/bloqueante |
+| Backend / lógica principal | Vistas Django (`views.py`) + API interna versionada (`core/api_views.py`, `/api/v1/`) | Funcional, ambas comparten el mismo pipeline de servicio |
+| Componente IA | Pipeline OCR → regex → spaCy → Gemini (`core/services/analizador.py`), invocado desde la vista web y desde `POST /api/v1/analizar-documento/` | Funcional, síncrono/bloqueante |
 | Datos | SQLite + archivos en `MEDIA_ROOT` | Funcional, sin backup |
 | Servicios externos | Google Gemini API, Gmail SMTP | Funcional, con límite de cuota en Gemini |
 | Configuración | Variables en `.env` vía `python-dotenv` | Implementado |
@@ -128,12 +130,17 @@
 
 ```text
 tributia_project/
+  .github/
+    workflows/
+      ci.yml
   core/
     models.py
     admin.py
     apps.py
     views.py
     urls.py
+    api_views.py
+    api_urls.py
     forms.py
     datos_el_salvador.py
     ocr_utils.py
@@ -161,7 +168,13 @@ tributia_project/
     arquitectura-objetivo.md
     riesgos-tecnicos.md
     plan-mejora.md
+    api.md
+    evidencia_tests_semana3.txt
   tests/
+    __init__.py
+    test_extractor.py
+    test_gemini_client.py
+    test_analizador.py
   tessdata/
     spa.traineddata
     eng.traineddata
@@ -174,7 +187,7 @@ tributia_project/
 
 **Notas sobre la estructura:**
 
-> `core/` concentra la app principal de Django: modelos, vistas, formularios, datos de referencia fiscal, y dos subcarpetas clave — `services/` con la orquestación del análisis y el asistente, e `ia/` con los módulos específicos de IA (Gemini, extracción regex, spaCy). `docs/` contiene toda la documentación técnica de esta entrega. `tests/` está reservado para la suite de pruebas que se agregará en la Semana 3. `tessdata/` empaqueta el modelo de idioma español de Tesseract OCR (`spa.traineddata`), ya que la instalación de Tesseract a nivel de sistema operativo normalmente solo trae el paquete de inglés por defecto (ver `core/ocr_utils.py`).
+> `core/` concentra la app principal de Django: modelos, vistas, formularios, datos de referencia fiscal, y dos subcarpetas clave — `services/` con la orquestación del análisis y el asistente, e `ia/` con los módulos específicos de IA (Gemini, extracción regex, spaCy). `api_views.py`/`api_urls.py` exponen la API interna versionada (`/api/v1/`), documentada en `docs/api.md`. `docs/` contiene toda la documentación técnica de esta entrega. `tests/` tiene la suite de pruebas automatizadas (unitarias + integración), corrida por `.github/workflows/ci.yml` en cada push/PR. `tessdata/` empaqueta el modelo de idioma español de Tesseract OCR (`spa.traineddata`), ya que la instalación de Tesseract a nivel de sistema operativo normalmente solo trae el paquete de inglés por defecto (ver `core/ocr_utils.py`).
 
 ---
 
@@ -203,6 +216,14 @@ python manage.py runserver
 ```
 
 Accesible en `http://127.0.0.1:8000/`.
+
+### Pruebas automatizadas
+
+```bash
+python manage.py test
+```
+
+Corre 22 pruebas (`tests/test_extractor.py`, `tests/test_gemini_client.py`, `tests/test_analizador.py`): unitarias sobre la extracción por regex, el parseo de la respuesta de Gemini y el cálculo de `confianza_clasificacion`, más pruebas de integración del pipeline completo (`analizar_documento`) mockeando Tesseract/OCR y Gemini para que sean rápidas, deterministas y no consuman cuota real de la API. Se ejecutan automáticamente en cada push/PR vía GitHub Actions (`.github/workflows/ci.yml`). Evidencia de la última corrida local en `docs/evidencia_tests_semana3.txt`.
 
 ### Variables de entorno
 
@@ -277,6 +298,9 @@ Ver detalle completo en [`docs/plan-mejora.md`](docs/plan-mejora.md).
 | Diagnóstico técnico | `docs/diagnostico-semana-1.md` | Estado actual detallado del proyecto |
 | Diagrama arquitectura actual | `docs/arquitectura-actual.md` | Diagrama Mermaid del flujo actual |
 | Diagrama arquitectura objetivo | `docs/arquitectura-objetivo.md` | Diagrama Mermaid de la evolución esperada |
+| Contrato de API y pruebas | `docs/api.md` | Endpoints `/health/`, `/metadata/`, `/analizar-documento/` con payloads y evidencia real de curl (éxito y errores controlados) |
+| Evidencia de pruebas automatizadas | `docs/evidencia_tests_semana3.txt` | Salida completa de `python manage.py test -v 2` (22 tests, todos pasando) |
+| Pipeline CI/CD | `.github/workflows/ci.yml` | Instala dependencias y corre la suite de pruebas en cada push/PR (ver badge al inicio del README) |
 | Capturas de pantalla | PDF de evidencia adicional (Canvas) | Flujo de registro, subida y análisis de documento |
 
 ---

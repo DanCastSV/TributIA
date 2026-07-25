@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    env:
+      # Valores dummy únicamente para que Django cargue settings.py en CI.
+      # No son secretos reales: los tests mockean Tesseract/OCR y Gemini,
+      # por lo que nunca se hace una llamada real a la API.
+      SECRET_KEY: "ci-dummy-secret-key"
+      GEMINI_API_KEY: "ci-dummy-gemini-key"
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: "pip"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Ejecutar migraciones y pruebas
+        run: python manage.py test -v 2

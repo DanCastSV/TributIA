@@ -4,17 +4,24 @@
 
 ## Semana 2 — API inteligente y contratos de entrada/salida
 
-- [ ] Definir y documentar el contrato de `POST /api/v1/analizar-documento/` (entrada: archivo + metadatos; salida: JSON estandarizado).
-- [ ] Extraer la lógica de `analizador.py` a una capa de servicio reutilizable, invocable desde la vista web y desde la API.
-- [ ] Agregar versionado de API (`/api/v1/`) para no romper el frontend actual con cambios futuros.
-- [ ] Documentar el esquema JSON de respuesta (campos, tipos, valores posibles).
+- [x] Definir y documentar el contrato de `POST /api/v1/analizar-documento/` (entrada: archivo + metadatos; salida: JSON estandarizado). Ver `docs/api.md`.
+- [x] Extraer la lógica de `analizador.py` a una capa de servicio reutilizable, invocable desde la vista web y desde la API. (`core/services/analizador.py` ya era esa capa; ahora también la invoca `core/api_views.py`).
+- [x] Agregar versionado de API (`/api/v1/`) para no romper el frontend actual con cambios futuros. Endpoints: `/api/v1/health/`, `/api/v1/metadata/`, `/api/v1/analizar-documento/`.
+- [x] Documentar el esquema JSON de respuesta (campos, tipos, valores posibles). Ver `docs/api.md`.
+- [x] Endpoints `/health/` y `/metadata/` con evidencia de prueba (curl).
+- [x] Validación básica de entrada (extensión, tamaño, autenticación) y manejo de errores (400/401/422/500) con evidencia de prueba exitosa y de error controlado.
 
 ## Semana 3 — Pruebas, automatización y CI/CD
 
-- [ ] Escribir tests unitarios para `ia/extractor.py` (regex de montos/NIT) y para el cálculo de `confianza_clasificacion`.
-- [ ] Escribir tests de integración del flujo completo de análisis, mockeando Gemini y Tesseract.
-- [ ] Configurar GitHub Actions para correr `manage.py test` en cada push/PR.
-- [ ] Empezar a retirar código muerto detectado en el diagnóstico.
+- [x] Escribir tests unitarios para `ia/extractor.py` (regex de montos/NIT) y para el cálculo de `confianza_clasificacion`. Ver `tests/test_extractor.py` y `tests/test_analizador.py::CalcularConfianzaTests`. Se extrajo `calcular_confianza()` de `analizador.py` a una función pura para poder testearla de forma aislada.
+- [x] Escribir tests de integración del flujo completo de análisis, mockeando Gemini y Tesseract. Ver `tests/test_analizador.py::AnalizarDocumentoIntegracionTests` (caso exitoso y caso de rechazo por documento no tributario).
+- [x] Configurar GitHub Actions para correr `manage.py test` en cada push/PR. Ver `.github/workflows/ci.yml`.
+- [ ] Empezar a retirar código muerto detectado en el diagnóstico. (Pendiente para Semana 4-5; no se tocó en esta entrega para no ampliar el alcance).
+
+### Errores detectados y corregidos en esta entrega
+
+- **Bug real encontrado por los tests** en `core/ia/extractor.py::extraer_resumen_fiscal`: el regex de `TOTAL` (`TOTAL[:\s\$]*([\d,]+\.\d{2})`) no distinguía "TOTAL" de "SUBTOTAL", así que en cualquier documento con ambas líneas (la gran mayoría de facturas reales), el campo `total` capturaba por error el valor del **subtotal**. Corregido agregando un lookbehind negativo (`(?<!SUB)TOTAL...`) en `extraer_resumen_fiscal`. Cubierto por `tests/test_extractor.py::ExtraerResumenFiscalTests::test_extrae_subtotal_iva_y_total`, que falló antes del fix y pasa después.
+- Dos fallas iniciales de test resultaron ser expectativas incorrectas en los tests (no bugs de producción): `extraer_montos` sí incluye el signo `$` en los montos devueltos (correcto, ya que solo se usa para mostrar `montos_detectados`, no para cálculos). Se ajustaron las aserciones.
 
 ## Semana 4 — Contenedor o despliegue
 

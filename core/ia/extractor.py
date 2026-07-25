@@ -77,8 +77,9 @@ def extraer_resumen_fiscal(texto):
     ]
 
     patrones_total = [
-        r'TOTAL[:\s\$]*([\d,]+\.\d{2})',
-        r'Total[:\s\$]*([\d,]+\.\d{2})'
+        # Lookbehind negativo para no confundir "TOTAL" con el final de "SUBTOTAL"
+        r'(?<!SUB)TOTAL[:\s\$]*([\d,]+\.\d{2})',
+        r'(?<!Sub)Total[:\s\$]*([\d,]+\.\d{2})'
     ]
 
     patrones_cargos = [

@@ -1,0 +1,95 @@
+C:\Users\ec133\Desktop\IAimpuestos\tributia_project\core\ia\gemini_client.py:4: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+Creating test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+Found 22 test(s).
+Operations to perform:
+  Synchronize unmigrated apps: messages, staticfiles
+  Apply all migrations: admin, auth, contenttypes, core, sessions
+Synchronizing apps without migrations:
+  Creating tables...
+    Running deferred SQL...
+Running migrations:
+  Applying contenttypes.0001_initial... OK
+  Applying auth.0001_initial... OK
+  Applying admin.0001_initial... OK
+  Applying admin.0002_logentry_remove_auto_add... OK
+  Applying admin.0003_logentry_add_action_flag_choices... OK
+  Applying contenttypes.0002_remove_content_type_name... OK
+  Applying auth.0002_alter_permission_name_max_length... OK
+  Applying auth.0003_alter_user_email_max_length... OK
+  Applying auth.0004_alter_user_username_opts... OK
+  Applying auth.0005_alter_user_last_login_null... OK
+  Applying auth.0006_require_contenttypes_0002... OK
+  Applying auth.0007_alter_validators_add_error_messages... OK
+  Applying auth.0008_alter_user_username_max_length... OK
+  Applying auth.0009_alter_user_last_name_max_length... OK
+  Applying auth.0010_alter_group_name_max_length... OK
+  Applying auth.0011_update_proxy_permissions... OK
+  Applying auth.0012_alter_user_first_name_max_length... OK
+  Applying core.0001_initial... OK
+  Applying core.0002_perfiltributario_actividad_economica_and_more... OK
+  Applying core.0003_consulta... OK
+  Applying core.0004_documentotributario_delete_consulta... OK
+  Applying core.0005_analisisdocumento... OK
+  Applying core.0006_analisisdocumento_categoria_detectada_and_more... OK
+  Applying core.0007_analisisdocumento_iva_analisisdocumento_otros_cargos_and_more... OK
+  Applying core.0008_analisisdocumento_recomendacion_ia... OK
+  Applying core.0009_analisisdocumento_direccion_detectada_and_more... OK
+  Applying core.0010_analisisdocumento_actualizado_en_and_more... OK
+  Applying core.0011_analisisdocumento_correo_analisisdocumento_giro_and_more... OK
+  Applying core.0012_analisisdocumento_es_deducible_and_more... OK
+  Applying core.0013_eventocalendario... OK
+  Applying sessions.0001_initial...test_analiza_y_guarda_documento_tributario_valido (tests.test_analizador.AnalizarDocumentoIntegracionTests.test_analiza_y_guarda_documento_tributario_valido) ... ok
+test_rechaza_y_elimina_documento_no_tributario (tests.test_analizador.AnalizarDocumentoIntegracionTests.test_rechaza_y_elimina_documento_no_tributario) ... ok
+test_cadenas_vacias_no_cuentan_como_extraidas (tests.test_analizador.CalcularConfianzaTests.test_cadenas_vacias_no_cuentan_como_extraidas) ... ok
+test_sin_ningun_campo_extraido (tests.test_analizador.CalcularConfianzaTests.test_sin_ningun_campo_extraido) ... ok
+test_solo_campos_clave_pesa_mas_que_solo_secundarios (tests.test_analizador.CalcularConfianzaTests.test_solo_campos_clave_pesa_mas_que_solo_secundarios) ... ok
+test_todos_los_campos_clave_y_secundarios_presentes (tests.test_analizador.CalcularConfianzaTests.test_todos_los_campos_clave_y_secundarios_presentes) ... ok
+test_detecta_dui_o_nit_homologado (tests.test_extractor.ExtraerIdentificadoresTests.test_detecta_dui_o_nit_homologado) ... ok
+test_detecta_nit_tradicional (tests.test_extractor.ExtraerIdentificadoresTests.test_detecta_nit_tradicional) ... ok
+test_texto_sin_identificadores_devuelve_listas_vacias (tests.test_extractor.ExtraerIdentificadoresTests.test_texto_sin_identificadores_devuelve_listas_vacias) ... ok
+test_encuentra_montos_con_decimales_y_separador_de_miles (tests.test_extractor.ExtraerMontosTests.test_encuentra_montos_con_decimales_y_separador_de_miles) ... ok
+test_no_duplica_montos_repetidos (tests.test_extractor.ExtraerMontosTests.test_no_duplica_montos_repetidos) ... ok
+test_texto_sin_montos_devuelve_lista_vacia (tests.test_extractor.ExtraerMontosTests.test_texto_sin_montos_devuelve_lista_vacia) ... ok
+test_campos_ausentes_quedan_en_none (tests.test_extractor.ExtraerResumenFiscalTests.test_campos_ausentes_quedan_en_none) ... ok
+test_extrae_nrc_telefono_correo_y_giro (tests.test_extractor.ExtraerResumenFiscalTests.test_extrae_nrc_telefono_correo_y_giro) ... ok
+test_extrae_subtotal_iva_y_total (tests.test_extractor.ExtraerResumenFiscalTests.test_extrae_subtotal_iva_y_total) ... ok
+test_ignora_texto_extra_antes_y_despues_del_json (tests.test_gemini_client.ExtraerJsonTests.test_ignora_texto_extra_antes_y_despues_del_json) ... ok
+test_parsea_json_con_bloque_markdown_sin_etiqueta_json (tests.test_gemini_client.ExtraerJsonTests.test_parsea_json_con_bloque_markdown_sin_etiqueta_json) ... ok
+test_parsea_json_envuelto_en_bloque_markdown (tests.test_gemini_client.ExtraerJsonTests.test_parsea_json_envuelto_en_bloque_markdown) ... ok
+test_parsea_json_plano (tests.test_gemini_client.ExtraerJsonTests.test_parsea_json_plano) ... ok
+test_respuesta_sin_json_lanza_value_error (tests.test_gemini_client.ExtraerJsonTests.test_respuesta_sin_json_lanza_value_error) ... ok
+test_incluye_mensaje_de_error_en_recomendacion (tests.test_gemini_client.ResultadoVacioTests.test_incluye_mensaje_de_error_en_recomendacion) ... ok
+test_todas_las_demas_claves_quedan_en_none (tests.test_gemini_client.ResultadoVacioTests.test_todas_las_demas_claves_quedan_en_none) ... ok
+
+----------------------------------------------------------------------
+Ran 22 tests in 1.998s
+
+OK
+Destroying test database for alias 'default' ('file:memorydb_default?mode=memory&cache=shared')...
+ OK
+System check identified no issues (0 silenced).
+PASO 1 - Extrayendo texto
+PASO 2 - Extrayendo montos
+PASO 3 - Extrayendo identificadores
+PASO 4 - Resumen fiscal
+PASO 5 - Procesamiento spaCy
+PASO 6 - Generando análisis con Gemini
+PASO 6b - Gemini resultado: es_documento_tributario=True
+PASO 7 - Guardando análisis
+PASO 8 - Actualizando documento
+PASO 9 - Finalizado
+PASO 1 - Extrayendo texto
+PASO 2 - Extrayendo montos
+PASO 3 - Extrayendo identificadores
+PASO 4 - Resumen fiscal
+PASO 5 - Procesamiento spaCy
+PASO 6 - Generando análisis con Gemini
+PASO 6b - Gemini resultado: es_documento_tributario=False

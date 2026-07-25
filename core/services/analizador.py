@@ -47,6 +47,33 @@ def _a_decimal(valor):
         return None
 
 
+def calcular_confianza(analisis_gemini):
+    """
+    Calcula confianza_clasificacion (0.0-1.0) según cuántos de los campos
+    clave/secundarios logró extraer Gemini. Campos clave pesan más porque
+    son los que más impactan la utilidad del análisis para el usuario.
+    """
+
+    campos_clave = [
+        analisis_gemini.get("empresa"),
+        analisis_gemini.get("tipo_documento"),
+        analisis_gemini.get("fecha"),
+        analisis_gemini.get("total"),
+    ]
+    campos_sec = [
+        analisis_gemini.get("cliente"),
+        analisis_gemini.get("numero_documento"),
+        analisis_gemini.get("iva"),
+        analisis_gemini.get("subtotal"),
+        analisis_gemini.get("nit"),
+    ]
+
+    ok_clave = sum(1 for v in campos_clave if v is not None and str(v).strip())
+    ok_sec = sum(1 for v in campos_sec if v is not None and str(v).strip())
+
+    return round((ok_clave * 0.18 + ok_sec * 0.056), 2)  # máx ≈ 1.0
+
+
 def analizar_documento(documento):
 
     print("PASO 1 - Extrayendo texto")
@@ -122,22 +149,7 @@ def analizar_documento(documento):
         return None
 
     # Confianza basada en campos clave que Gemini logró extraer
-    _campos_clave = [
-        analisis_gemini.get("empresa"),
-        analisis_gemini.get("tipo_documento"),
-        analisis_gemini.get("fecha"),
-        analisis_gemini.get("total"),
-    ]
-    _campos_sec = [
-        analisis_gemini.get("cliente"),
-        analisis_gemini.get("numero_documento"),
-        analisis_gemini.get("iva"),
-        analisis_gemini.get("subtotal"),
-        analisis_gemini.get("nit"),
-    ]
-    _ok_clave = sum(1 for v in _campos_clave if v is not None and str(v).strip())
-    _ok_sec   = sum(1 for v in _campos_sec   if v is not None and str(v).strip())
-    confianza = round((_ok_clave * 0.18 + _ok_sec * 0.056), 2)  # máx ≈ 1.0
+    confianza = calcular_confianza(analisis_gemini)
 
     AnalisisDocumento.objects.create(
 
