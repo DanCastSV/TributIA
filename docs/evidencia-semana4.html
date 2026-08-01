@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Semana 4 — Despliegue, Contenedores e Infraestructura — TributIA</title>
+<style>
+  :root {
+    --ink: #1a1a1a;
+    --muted: #55606c;
+    --accent: #059669;
+    --border: #d7dce1;
+    --code-bg: #f4f6f8;
+    --table-head: #eef2f0;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color: var(--ink);
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 2rem;
+    line-height: 1.55;
+    font-size: 14px;
+  }
+  h1, h2, h3 { color: #0b3d2e; line-height: 1.25; }
+  h1 { font-size: 1.9rem; margin-bottom: .2rem; }
+  h2 {
+    font-size: 1.25rem;
+    border-bottom: 2px solid var(--accent);
+    padding-bottom: .3rem;
+    margin-top: 2.2rem;
+  }
+  h3 { font-size: 1.05rem; margin-top: 1.4rem; }
+  code, pre {
+    font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+    font-size: 12.5px;
+  }
+  code { background: var(--code-bg); padding: .1rem .35rem; border-radius: 4px; }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: .9rem 1rem;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  table { border-collapse: collapse; width: 100%; margin: .8rem 0; font-size: 13px; }
+  th, td { border: 1px solid var(--border); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--table-head); }
+  .muted { color: var(--muted); }
+  .badge {
+    display: inline-block;
+    background: var(--accent);
+    color: white;
+    padding: .15rem .6rem;
+    border-radius: 999px;
+    font-size: .8rem;
+    font-weight: 600;
+  }
+  .cover {
+    min-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    page-break-after: always;
+  }
+  .cover h1 { font-size: 2.4rem; margin-bottom: .5rem; }
+  .cover .subtitle { font-size: 1.1rem; color: var(--muted); margin-bottom: 2.5rem; }
+  .cover table { max-width: 480px; margin: 0 auto; }
+  .cover table td:first-child { font-weight: 600; width: 40%; }
+  .page-break { page-break-before: always; }
+  .repo-page {
+    min-height: 60vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+    page-break-before: always;
+  }
+  .repo-page a { font-size: 1.15rem; word-break: break-all; }
+  .note {
+    background: #fef8e7;
+    border: 1px solid #eddc9a;
+    border-radius: 6px;
+    padding: .8rem 1rem;
+    font-size: 13px;
+  }
+  .checklist li { margin-bottom: .3rem; }
+  ul, ol { padding-left: 1.4rem; }
+  @media print {
+    body { padding: 0; font-size: 12px; }
+    a { color: inherit; text-decoration: none; }
+    pre { break-inside: avoid; }
+    table { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<!-- PORTADA -->
+<section class="cover">
+  <div>
+    <span class="badge">Módulo 4 — Desarrollo de Aplicaciones con IA</span>
+    <h1>TributIA</h1>
+    <div class="subtitle">Evaluación Semana 4 — Despliegue, contenedores e infraestructura inicial</div>
+    <table>
+      <tr><td>Equipo</td><td>11</td></tr>
+      <tr><td>Integrantes</td><td>Daniel Enrique Zaldaña Castillo · Edwin Adony Ulloa Díaz · Anthony Enrique Alvarenga Mayen</td></tr>
+      <tr><td>Docente</td><td>Ing. Marco Arévalo Zambrano</td></tr>
+      <tr><td>Fecha</td><td>1 de agosto de 2026</td></tr>
+      <tr><td>Repositorio</td><td>https://github.com/DanCastSV/TributIA</td></tr>
+    </table>
+  </div>
+</section>
+
+<h2>1. Descripción breve del servicio preparado</h2>
+<p>TributIA es una plataforma web Django que analiza documentos tributarios (facturas, constancias, comprobantes en PDF/PNG/JPG) mediante un pipeline de OCR (Tesseract) + NLP (spaCy) + LLM (Google Gemini), y expone tanto una interfaz web como una API interna versionada (<code>/api/v1/</code>). Para esta entrega se preparó el servicio completo (app Django + dependencias de sistema para OCR) para ejecutarse de forma reproducible dentro de un contenedor Docker, fuera del entorno personal de desarrollo.</p>
+
+<h2>2. Ruta elegida</h2>
+<p><strong>Contenedor Docker</strong>, mediante <code>Dockerfile</code> + <code>docker-compose.yml</code> en la raíz del repositorio, con dos servicios: <code>web</code> (Django + gunicorn) y <code>db</code> (PostgreSQL 16) — la base de datos del contenedor se migró de SQLite a PostgreSQL como parte de esta entrega (sección 6b).</p>
+<div class="note">Se encontró un bloqueo inicial de entorno ("Virtualization support not detected" en Docker Desktop) por falta de WSL2/Virtual Machine Platform en Windows — documentado con causa raíz y solución en la sección 9.1.</div>
+
+<h2>3. Dockerfile</h2>
+<pre>FROM python:3.13-slim
+
+# tesseract-ocr: motor de OCR usado por core/ocr_utils.py (el paquete de
+# idioma español se toma del tessdata/ empaquetado en el repo, no del
+# sistema). poppler-utils: requerido por pdf2image para convertir PDF a
+# imagen. build-essential: por si alguna dependencia de spaCy no trae
+# wheel prebuilt para esta versión de Python y necesita compilar.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    poppler-utils \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+EXPOSE 8000
+
+# migrate + collectstatic corren al iniciar el contenedor (no en build)
+# porque settings.py exige SECRET_KEY/GEMINI_API_KEY vía os.environ[...],
+# que solo están disponibles en runtime a través de .env / env_file.
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn tributia_project.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 120"]</pre>
+
+<p><strong>docker-compose.yml:</strong></p>
+<pre>services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DEBUG=False
+      - ALLOWED_HOSTS=localhost,127.0.0.1
+      - POSTGRES_HOST=db
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./media:/app/media
+
+volumes:
+  postgres_data:</pre>
+
+<h2>4. <code>.dockerignore</code></h2>
+<pre>.git
+.github
+.venv
+venv
+env
+__pycache__
+*.pyc
+*.pyo
+.env
+db.sqlite3
+media
+staticfiles
+docs
+tests
+.vscode
+.idea
+Thumbs.db
+*.md</pre>
+<p class="muted">Excluye secretos reales (<code>.env</code> — se inyectan vía <code>env_file</code> en runtime, nunca se copian a la imagen), datos de desarrollo (<code>db.sqlite3</code>, <code>media/</code>) y archivos no necesarios en runtime (<code>docs/</code>, <code>tests/</code>, markdown), para mantener la imagen liviana y sin datos sensibles horneados.</p>
+
+<h2>5. Variables de entorno</h2>
+<p><code>.env.example</code> (sin valores reales):</p>
+<pre>SECRET_KEY=change-me
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1
+GEMINI_API_KEY=your-gemini-api-key
+EMAIL_HOST_USER=your-email@gmail.com
+EMAIL_HOST_PASSWORD=your-gmail-app-password</pre>
+<table>
+  <tr><th>Variable</th><th>Descripción</th><th>Obligatoria</th><th>Nueva en Semana 4</th></tr>
+  <tr><td><code>SECRET_KEY</code></td><td>Clave secreta de Django</td><td>Sí</td><td></td></tr>
+  <tr><td><code>DEBUG</code></td><td><code>True</code>/<code>False</code>. En contenedor se recomienda <code>False</code></td><td>Sí</td><td></td></tr>
+  <tr><td><code>ALLOWED_HOSTS</code></td><td>Hosts separados por coma permitidos por Django</td><td>Sí</td><td>✔️</td></tr>
+  <tr><td><code>GEMINI_API_KEY</code></td><td>API key de Google Gemini</td><td>Sí</td><td></td></tr>
+  <tr><td><code>EMAIL_HOST_USER</code> / <code>EMAIL_HOST_PASSWORD</code></td><td>Credenciales SMTP de Gmail</td><td>Sí</td><td></td></tr>
+  <tr><td><code>POSTGRES_DB</code> / <code>POSTGRES_USER</code> / <code>POSTGRES_PASSWORD</code></td><td>Credenciales de PostgreSQL (servicio <code>db</code>)</td><td>Solo en Docker</td><td>✔️</td></tr>
+</table>
+<p class="muted"><code>DEBUG</code> y <code>ALLOWED_HOSTS</code> se agregaron en <code>tributia_project/settings.py</code> como configurables por entorno (antes: <code>DEBUG = True</code> y <code>ALLOWED_HOSTS = []</code> hardcodeados) — requisito para correr el servicio fuera de <code>manage.py runserver</code>.</p>
+
+<h2 class="page-break">6. Evidencia de construcción y ejecución</h2>
+<p><strong>Construcción de la imagen (<code>docker compose build</code>):</strong></p>
+<pre>$ docker compose build
+ Image tributia-web Building
+#6 [1/6] FROM docker.io/library/python:3.13-slim
+#7 [2/6] RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr poppler-utils build-essential
+#9 [4/6] COPY requirements.txt .
+#10 [5/6] RUN pip install --no-cache-dir -r requirements.txt
+#10 72.85 Successfully installed Django-6.0.3 ... gunicorn-23.0.0 ... whitenoise-6.8.2 ... spacy-3.8.14 ... google-generativeai-0.8.6
+#11 [6/6] COPY . .
+#12 exporting to image
+#12 naming to docker.io/library/tributia-web:latest done
+ Image tributia-web Built</pre>
+<p class="muted">Build exitoso, sin errores de compilación (las dependencias de spaCy —<code>blis</code>, <code>thinc</code>— trajeron wheels prebuilt para Python 3.13).</p>
+
+<p><strong>Ejecución (<code>docker compose up -d</code>) y arranque:</strong></p>
+<pre>$ docker compose up -d
+ Network tributia_default Created
+ Container tributia-web-1 Created
+ Container tributia-web-1 Started
+
+$ docker compose logs web
+web-1  | Operations to perform:
+web-1  |   Apply all migrations: admin, auth, contenttypes, core, sessions
+web-1  | Running migrations:
+web-1  |   No migrations to apply.
+web-1  | 132 static files copied to '/app/staticfiles', 396 post-processed, 2 skipped due to conflict.
+web-1  | [2026-08-01 21:43:20 +0000] [36] [INFO] Starting gunicorn 23.0.0
+web-1  | [2026-08-01 21:43:20 +0000] [36] [INFO] Listening at: http://0.0.0.0:8000 (36)
+web-1  | [2026-08-01 21:43:20 +0000] [36] [INFO] Using worker: sync
+web-1  | [2026-08-01 21:43:20 +0000] [37] [INFO] Booting worker with pid: 37
+web-1  | [2026-08-01 21:43:20 +0000] [38] [INFO] Booting worker with pid: 38
+web-1  | [2026-08-01 21:43:20 +0000] [39] [INFO] Booting worker with pid: 39
+
+$ docker compose ps
+NAME             IMAGE          COMMAND                  STATUS          PORTS
+tributia-web-1   tributia-web   "sh -c 'python manag…"   Up              0.0.0.0:8000->8000/tcp</pre>
+<p>El contenedor migró la base de datos, corrió <code>collectstatic</code> (whitenoise sirviendo estáticos, sin nginx) y levantó gunicorn con 3 workers, con <code>DEBUG=False</code> y <code>ALLOWED_HOSTS=localhost,127.0.0.1</code> — la misma configuración que tendría un despliegue real, no <code>manage.py runserver</code>.</p>
+
+<h2>6b. Migración a PostgreSQL</h2>
+<p>Se agregó el servicio <code>db</code> (<code>postgres:16-alpine</code>) a <code>docker-compose.yml</code>, con volumen nombrado <code>postgres_data</code> y <code>healthcheck</code> (<code>pg_isready</code>); <code>web</code> espera a que Postgres esté sano antes de arrancar (<code>depends_on: condition: service_healthy</code>). <code>settings.py</code> elige el motor según el entorno:</p>
+<pre>if os.environ.get('POSTGRES_HOST'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': os.environ['POSTGRES_DB'],
+            'USER': os.environ['POSTGRES_USER'],
+            'PASSWORD': os.environ['POSTGRES_PASSWORD'],
+            'HOST': os.environ['POSTGRES_HOST'],
+            'PORT': os.environ.get('POSTGRES_PORT', '5432'),
+        }
+    }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }</pre>
+<p class="muted">SQLite se mantiene como fallback en desarrollo local sin Docker, para no romper el flujo de trabajo actual del equipo.</p>
+<pre>$ docker compose up -d --build
+#10  Successfully installed ... psycopg2-binary-2.9.10 ...
+ Image tributia-web Built
+ Volume tributia_postgres_data Created
+ Container tributia-db-1 Started
+ Container tributia-db-1 Healthy
+ Container tributia-web-1 Started
+
+$ docker compose logs web
+web-1  |   Applying auth.0012_alter_user_first_name_max_length... OK
+web-1  |   Applying core.0001_initial... OK
+web-1  |   ...
+web-1  |   Applying core.0013_eventocalendario... OK
+web-1  |   Applying sessions.0001_initial... OK
+web-1  | 132 static files copied to '/app/staticfiles', 396 post-processed, 2 skipped due to conflict.
+web-1  | [INFO] Starting gunicorn 23.0.0</pre>
+<p>Las 30+ migraciones existentes corrieron limpio contra la base Postgres nueva, sin ningún ajuste a <code>core/models.py</code> — el ORM de Django abstrajo la diferencia de motor.</p>
+
+<h2>7. Prueba del endpoint <code>/health</code></h2>
+<pre>$ curl -s -w "\nHTTP_STATUS:%{http_code}\n" http://localhost:8000/api/v1/health/
+{"status": "ok", "checks": {"base_datos": "ok", "tesseract": "ok", "gemini_api_key": "configurada"}}
+HTTP_STATUS:200</pre>
+<p>Confirma, <strong>desde dentro del contenedor</strong>, que la BD funciona, que <code>tesseract</code> instalado vía <code>apt-get</code> se encuentra correctamente, y que <code>GEMINI_API_KEY</code> llegó inyectada desde <code>.env</code>.</p>
+<pre>$ curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8000/
+200
+# HTML devuelto referencia /static/css/style.5eaec3cdde5d.css
+# (hash de cache-busting de CompressedManifestStaticFilesStorage / whitenoise)</pre>
+
+<h2 class="page-break">8. Prueba del endpoint principal</h2>
+<p>Endpoint principal de IA: <code>POST /api/v1/analizar-documento/</code>. Requiere sesión autenticada; se probó con el flujo completo: login por curl → subida de un documento real (factura PDF) → pipeline completo (OCR/texto embebido, spaCy, Gemini) corriendo dentro del contenedor.</p>
+<pre># 1. Login (obtiene sessionid)
+$ curl -s -c cookies.txt http://localhost:8000/login/ -o /dev/null
+$ CSRF=$(grep csrftoken cookies.txt | awk '{print $7}')
+$ curl -s -b cookies.txt -c cookies.txt -X POST \
+    -d "username=demo_docker&password=DemoDocker123!&csrfmiddlewaretoken=$CSRF" \
+    -e "http://localhost:8000/login/" \
+    -w "HTTP_STATUS_LOGIN:%{http_code}\n" -o /dev/null \
+    http://localhost:8000/login/
+HTTP_STATUS_LOGIN:302
+
+# 2. Subida y análisis de un documento real
+$ curl -s -b cookies.txt -X POST \
+    -F "archivo=@media/documentos/.../factura.pdf" \
+    -w "\nHTTP_STATUS:%{http_code}\n" \
+    http://localhost:8000/api/v1/analizar-documento/</pre>
+<p><strong>Respuesta real (<code>201 Created</code>), pipeline completo ejecutado dentro del contenedor y persistido en PostgreSQL, incluyendo la llamada real a Gemini:</strong></p>
+<pre>{
+  "documento_id": 1,
+  "estado": "analizado",
+  "es_documento_tributario": true,
+  "es_deducible": true,
+  "confianza_clasificacion": 1.0,
+  "tipo_documento_detectado": "Factura",
+  "entidades": {
+    "empresa": "UNIVERSIDAD CAPITAN GENERAL GERARDO BARRIOS",
+    "fecha_documento": "29/07/2026",
+    "numero_documento": "DTE-01-M001P001-000000000060602"
+  },
+  "montos": { "subtotal": 143.75, "iva": null, "otros_cargos": null, "total": 143.75 },
+  "resumen_ia": "Factura electrónica emitida por la UNIVERSIDAD CAPITAN GENERAL GERARDO BARRIOS ... por concepto de pago de cuota educativa. El monto total de la operación es de $143.75.",
+  "recomendacion_ia": "Se recomienda verificar que el monto total declarado por educación no exceda el límite anual de $15,000 para hacer efectiva la deducción...",
+  "justificacion_deducible": "El gasto corresponde a educación, que es deducible hasta $15,000 anuales según la legislación fiscal salvadoreña."
+}
+HTTP_STATUS:201</pre>
+<p class="muted">(Campos con datos personales del documento de prueba —cliente, NIT, dirección— se omitieron de este resumen por privacidad; el esquema completo de respuesta está documentado en <code>docs/api.md</code>.)</p>
+<p>Esta prueba confirma que, dentro del contenedor, funcionan de punta a punta: extracción de texto, spaCy (entidades), la llamada real a la API de Gemini (clasificación + resumen + recomendación), y la escritura a la base de datos — no es un mock.</p>
+
+<h2 class="page-break">9. Errores, intentos, bloqueos y correcciones realizadas</h2>
+
+<h3>9.1 Bloqueo: Docker Desktop no arrancaba ("Virtualization support not detected")</h3>
+<p><strong>Síntoma:</strong> al abrir Docker Desktop, pantalla de error "Virtualization support not detected", con el motor ("Engine") detenido.</p>
+<p><strong>Diagnóstico:</strong></p>
+<pre>&gt; systeminfo | Select-String "Hyper-V" -Context 0,8
+Requisitos Hyper-V:  Extensiones de modo de monitor de VM: Sí
+                     Se habilitó la virtualización en el firmware: Sí
+                     ...</pre>
+<p>La virtualización SÍ estaba habilitada a nivel de firmware/BIOS (equipo físico ASUS Vivobook, no una VM). Al consultar las características de Windows relacionadas:</p>
+<pre>&gt; Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform
+Get-WindowsOptionalFeature : La operación requiere elevación.
+
+&gt; wsl.exe --version
+(imprime el texto de ayuda en vez de un número de versión &rarr; binario desactualizado, WSL2 no instalado realmente)</pre>
+<p><strong>Explicación técnica:</strong> las características de Windows "Windows Subsystem for Linux" y "Virtual Machine Platform" (requeridas por el backend WSL2 de Docker Desktop) no estaban habilitadas, aunque el hardware sí soportaba virtualización.</p>
+<p><strong>Ruta de corrección aplicada:</strong></p>
+<pre># PowerShell como Administrador
+dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
+dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
+# Reinicio de Windows
+# Tras reiniciar (PowerShell normal):
+wsl --update
+wsl --set-default-version 2</pre>
+<p>Después de esto, Docker Desktop inició correctamente (<code>docker ps</code> respondió sin error).</p>
+
+<h3>9.2 Bug real: <code>InvalidStorageError</code> al subir un documento dentro del contenedor</h3>
+<p><strong>Síntoma:</strong> con el contenedor corriendo (<code>/health</code> en <code>200 OK</code>), el endpoint principal devolvía <code>500 Internal Server Error</code> (página genérica, ya que <code>DEBUG=False</code>).</p>
+<p><strong>Diagnóstico:</strong> se levantó una instancia temporal del mismo contenedor con <code>DEBUG=True</code> (<code>docker compose run --rm -e DEBUG=True -p 8001:8000 web ...</code>) para ver el traceback completo:</p>
+<pre>Exception Type: InvalidStorageError at /api/v1/analizar-documento/
+Exception Value: Could not find config for 'default' in settings.STORAGES.</pre>
+<p><strong>Causa raíz:</strong> al agregar whitenoise se definió <code>STORAGES</code> con solo la clave <code>"staticfiles"</code>. Desde Django 4.2, <code>STORAGES</code> reemplaza por completo la config por defecto — al faltar la clave <code>"default"</code> (usada por <code>FileField</code>/<code>ImageField</code>, incluida la subida de documentos), cualquier subida de archivo rompía. No se manifestaba en desarrollo local porque ahí <code>STORAGES</code> no estaba definido.</p>
+<p><strong>Corrección aplicada</strong> (<code>tributia_project/settings.py</code>):</p>
+<pre>STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}</pre>
+<p><strong>Verificación:</strong> se reconstruyó la imagen (<code>docker compose up -d --build</code>) y se repitió la prueba del endpoint principal (sección 8), obteniendo <code>201 Created</code> con el pipeline de IA completo funcionando.</p>
+
+<h3>9.3 Nota sobre observabilidad</h3>
+<p>Mientras se investigaba el error 500, se confirmó que con <code>DEBUG=False</code> y sin <code>LOGGING</code> explícito en <code>settings.py</code>, los <code>logger.exception(...)</code> ya existentes en <code>core/api_views.py</code> no aparecían en <code>docker compose logs</code> (el logger raíz de Django solo envía al handler <code>console</code> cuando <code>DEBUG=True</code>). Confirma el riesgo ya identificado en <code>riesgos-tecnicos.md</code> y refuerza la prioridad de logging estructurado para la Semana 5.</p>
+
+<h2 class="page-break">10. Plan de infraestructura mínima</h2>
+<table>
+<tr><th>Componente</th><th>Propuesta</th><th>Justificación</th></tr>
+<tr><td>Cómputo</td><td>1 contenedor Docker (app + gunicorn), 1 vCPU / 1–2 GB RAM</td><td>El pipeline de OCR/spaCy es el punto más pesado en CPU/RAM; con carga baja (proyecto académico) alcanza con un worker pequeño</td></tr>
+<tr><td>Base de datos</td><td>PostgreSQL — ya migrado dentro del contenedor (servicio <code>db</code>); para producción, apuntar <code>POSTGRES_HOST</code>/credenciales a un Postgres administrado en vez del contenedor local</td><td>SQLite no soportaba escritura concurrente real; riesgo ya mitigado, falta solo apuntar a una instancia administrada</td></tr>
+<tr><td>Almacenamiento de archivos</td><td>Volumen persistente para MEDIA_ROOT, o bucket S3-compatible</td><td>Los documentos deben sobrevivir a reinicios/redeploys del contenedor</td></tr>
+<tr><td>Cola de tareas (futuro)</td><td>Redis + Celery/RQ</td><td>El pipeline de análisis es síncrono y bloqueante; mover a cola evita timeouts</td></tr>
+<tr><td>Servidor de aplicación</td><td>gunicorn detrás de un proxy inverso (nginx / proxy del PaaS)</td><td>gunicorn no debe exponerse directo a internet en producción</td></tr>
+<tr><td>Archivos estáticos</td><td>whitenoise (ya integrado)</td><td>Evita depender de un servidor web adicional en un despliegue de bajo tráfico</td></tr>
+<tr><td>Variables/secretos</td><td><code>.env</code> fuera de control de versiones, o gestor de secretos del proveedor</td><td>Ninguna clave real debe vivir en el repo</td></tr>
+<tr><td>Backups</td><td>Backup automático diario de la base de datos</td><td>Actualmente SQLite no tiene backup</td></tr>
+</table>
+
+<h2>11. Estimación de costos iniciales (supuestos)</h2>
+<p class="muted">Supuestos: tráfico bajo (proyecto académico, decenas de usuarios concurrentes como máximo), sin SLA de alta disponibilidad, un solo entorno.</p>
+<table>
+<tr><th>Ítem</th><th>Opción de bajo costo</th><th>Estimación mensual (USD)</th><th>Supuesto</th></tr>
+<tr><td>Hosting del contenedor</td><td>Free/hobby de un PaaS (Render, Railway)</td><td>$0 – $7</td><td>Free tier con "sleep" tras inactividad, o primer tier pago para disponibilidad continua</td></tr>
+<tr><td>Base de datos PostgreSQL</td><td>Free/starter del mismo proveedor</td><td>$0 – $5</td><td>Free tier con límite de almacenamiento (256MB–1GB)</td></tr>
+<tr><td>Almacenamiento de archivos</td><td>Incluido en el plan, o bucket free tier (Cloudflare R2: 10GB)</td><td>$0</td><td>Documentos son PDFs/imágenes de pocos MB</td></tr>
+<tr><td>Google Gemini API</td><td>Tier gratuito de Google AI Studio</td><td>$0</td><td>Limitado por cuota diaria de requests</td></tr>
+<tr><td>Dominio (opcional)</td><td>Subdominio gratuito del proveedor</td><td>$0</td><td>Dominio propio rondaría $10–15/año</td></tr>
+<tr><td><strong>Total estimado (piloto)</strong></td><td></td><td><strong>$0 – $12/mes</strong></td><td>Válido dentro de los free tiers</td></tr>
+</table>
+<p>El mayor riesgo de costo no es la infraestructura sino el consumo de la API de Gemini si el proyecto escalara más allá del tier gratuito.</p>
+
+<h2>12. Riesgos técnicos pendientes</h2>
+<ol class="checklist">
+  <li><strong>Pipeline síncrono y bloqueante</strong> dentro del request HTTP — un documento grande o Gemini lento puede provocar timeouts del proxy/PaaS. Mitigación planeada: cola de tareas (Celery/RQ).</li>
+  <li><s>SQLite no apto para concurrencia real en producción</s> — <strong>mitigado en esta entrega</strong>: el contenedor corre sobre PostgreSQL. Pendiente: apuntar a una instancia administrada (no el contenedor local) para producción.</li>
+  <li><strong>Sin validación de permisos por usuario</strong> en vistas sensibles — pendiente para Semana 6.</li>
+  <li><strong>Cuota de Gemini limitada</strong> — bajo carga real en un ambiente desplegado, la probabilidad de agotar la cuota diaria sube.</li>
+  <li><strong>Sin backups automáticos</strong> de la base de datos ni de MEDIA_ROOT (el volumen <code>postgres_data</code> persiste entre reinicios del contenedor, pero no hay backup fuera de la máquina host).</li>
+  <li><strong>Imagen Docker no integrada al pipeline de CI</strong> — el CI de Semana 3 solo corre <code>manage.py test</code> contra SQLite en memoria, no <code>docker build</code> ni pruebas contra Postgres. Mejora planeada para Semana 5.</li>
+  <li><strong>Pipeline de análisis aún síncrono y bloqueante</strong> también dentro del contenedor — la migración a Postgres no resuelve esto; sigue pendiente moverlo a cola de tareas (Celery/RQ).</li>
+</ol>
+
+<section class="repo-page">
+  <h2>Repositorio actualizado</h2>
+  <p><a href="https://github.com/DanCastSV/TributIA">https://github.com/DanCastSV/TributIA</a></p>
+  <p class="muted">Incluye código fuente, README con instrucciones de ejecución local y con Docker, <code>Dockerfile</code>, <code>.dockerignore</code>, <code>.env.example</code>, pruebas y workflow de CI de Semana 3, y toda la documentación de esta entrega en <code>docs/despliegue-semana4.md</code>.</p>
+</section>
+
+</body>
+</html>

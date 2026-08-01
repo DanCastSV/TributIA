@@ -76,11 +76,14 @@
 - Perfil tributario con barra de progreso de completitud y cálculo real de confianza de clasificación.
 - API interna versionada (`/api/v1/`) con endpoints `/health/`, `/metadata/` y `/analizar-documento/`, documentada en `docs/api.md` (Semana 2).
 - Suite de pruebas automatizadas (22 tests: unitarias de extracción regex, parsing de Gemini y cálculo de confianza, más integración del pipeline completo mockeando OCR/Gemini) con CI en GitHub Actions (Semana 3).
+- Contenedor Docker (`Dockerfile` + `docker-compose.yml`, servicios `web` + `db`/PostgreSQL) con gunicorn + whitenoise, `DEBUG`/`ALLOWED_HOSTS`/`POSTGRES_*` configurables por entorno, probado de punta a punta (build, migraciones contra Postgres, `/health`, endpoint principal con pipeline de IA real) (Semana 4). Ver `docs/despliegue-semana4.md`.
+- Migración de SQLite a PostgreSQL dentro del contenedor (`settings.py` usa Postgres si detecta `POSTGRES_HOST`, y SQLite en desarrollo local sin Docker).
 
 ### Funcionalidades incompletas o pendientes
 
-- Contenedor/despliegue y ejecución asíncrona del pipeline (Semana 4).
-- Logs estructurados, healthcheck y métricas de uso de Gemini (Semana 5).
+- Ejecución asíncrona del pipeline de análisis (cola de tareas Celery/RQ) — sigue siendo síncrono/bloqueante dentro del contenedor (Semana 4-5).
+- Apuntar el contenedor a un PostgreSQL *administrado* (no el servicio `db` local) para un despliegue real.
+- Logs estructurados, healthcheck ampliado y métricas de uso de Gemini (Semana 5).
 
 ### Evidencias actuales
 
@@ -100,7 +103,7 @@
 | Interfaz | Templates Django (HTML/CSS/JS vanilla, sin frameworks) | Funcional |
 | Backend / lógica principal | Vistas Django (`views.py`) + API interna versionada (`core/api_views.py`, `/api/v1/`) | Funcional, ambas comparten el mismo pipeline de servicio |
 | Componente IA | Pipeline OCR → regex → spaCy → Gemini (`core/services/analizador.py`), invocado desde la vista web y desde `POST /api/v1/analizar-documento/` | Funcional, síncrono/bloqueante |
-| Datos | SQLite + archivos en `MEDIA_ROOT` | Funcional, sin backup |
+| Datos | SQLite (desarrollo local sin Docker) o PostgreSQL (contenedor Docker, Semana 4) + archivos en `MEDIA_ROOT` | Funcional, sin backup automático |
 | Servicios externos | Google Gemini API, Gmail SMTP | Funcional, con límite de cuota en Gemini |
 | Configuración | Variables en `.env` vía `python-dotenv` | Implementado |
 
@@ -217,6 +220,17 @@ python manage.py runserver
 
 Accesible en `http://127.0.0.1:8000/`.
 
+### Ejecución con Docker (Semana 4)
+
+Requiere Docker Desktop (con backend WSL2 en Windows) corriendo.
+
+```bash
+cp .env.example .env   # completar con valores reales
+docker compose up -d --build
+```
+
+Levanta dos servicios: `db` (PostgreSQL 16) y `web` (Django + gunicorn + whitenoise, `DEBUG=False`) en `http://localhost:8000/`. Migraciones y `collectstatic` corren automáticamente al iniciar el contenedor `web`, ya contra PostgreSQL. Ver `Dockerfile`, `docker-compose.yml` y el detalle completo (decisiones, evidencia de build/run, migración a Postgres, errores encontrados y corregidos, plan de infraestructura y costos) en [`docs/despliegue-semana4.md`](docs/despliegue-semana4.md).
+
 ### Pruebas automatizadas
 
 ```bash
@@ -231,6 +245,7 @@ Corre 22 pruebas (`tests/test_extractor.py`, `tests/test_gemini_client.py`, `tes
 |---|---|---|
 | `SECRET_KEY` | Clave secreta de Django | Sí |
 | `DEBUG` | Modo debug (`True`/`False`) | Sí |
+| `ALLOWED_HOSTS` | Hosts permitidos, separados por coma (ej. `localhost,127.0.0.1`) | Sí |
 | `GEMINI_API_KEY` | API key de Google Gemini para análisis y asistente | Sí |
 | `EMAIL_HOST_USER` | Cuenta de Gmail usada para envío de correos | Sí |
 | `EMAIL_HOST_PASSWORD` | App Password de Gmail (SMTP) | Sí |

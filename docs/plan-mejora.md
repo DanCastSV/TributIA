@@ -25,10 +25,15 @@
 
 ## Semana 4 — Contenedor o despliegue
 
-- [ ] Crear `Dockerfile` que incluya Tesseract y dependencias de spaCy.
-- [ ] Crear `docker-compose.yml` (app + PostgreSQL + Redis para cola de tareas).
-- [ ] Migrar la base de datos de SQLite a PostgreSQL para el entorno de staging.
-- [ ] Mover el pipeline de análisis a ejecución asíncrona (Celery/RQ) en vez de bloquear el request.
+- [x] Crear `Dockerfile` que incluya Tesseract y dependencias de spaCy. Ver `Dockerfile` y `docs/despliegue-semana4.md`.
+- [x] Crear `docker-compose.yml` con servicios `web` + `db` (PostgreSQL). Redis para cola de tareas queda pendiente (ver ítem de abajo), ya que depende de mover primero el pipeline a async — agregarlo antes sería un servicio sin usar.
+- [x] Migrar la base de datos de SQLite a PostgreSQL para el entorno del contenedor. `settings.py` usa PostgreSQL automáticamente cuando existe `POSTGRES_HOST` en el entorno (dentro de `docker-compose`) y cae a SQLite en desarrollo local sin Docker, para no romper el flujo de trabajo actual del equipo. Ver `docs/despliegue-semana4.md` §6b.
+- [ ] Mover el pipeline de análisis a ejecución asíncrona (Celery/RQ) en vez de bloquear el request. (Pendiente, sigue síncrono también dentro del contenedor).
+
+### Errores detectados y corregidos en esta entrega
+
+- **Bug real encontrado al probar el contenedor**: al agregar `whitenoise` para servir estáticos se definió `STORAGES` en `settings.py` con solo la clave `"staticfiles"`, lo que sobrescribió por completo la configuración de storages de Django y dejó sin `"default"` (el storage usado por la subida de documentos a `MEDIA_ROOT`). Cualquier subida de documento fallaba con `InvalidStorageError: Could not find config for 'default' in settings.STORAGES.`. No se detectó en desarrollo local porque ahí `STORAGES` no estaba definido. Corregido agregando explícitamente la clave `"default"` con `FileSystemStorage`. Ver detalle completo en `docs/despliegue-semana4.md` §9.2.
+- **Bloqueo de entorno**: Docker Desktop no arrancaba ("Virtualization support not detected") porque las características de Windows WSL2/Virtual Machine Platform no estaban habilitadas (el hardware sí soportaba virtualización). Resuelto habilitando ambas características vía `dism.exe` y reiniciando Windows. Ver `docs/despliegue-semana4.md` §9.1.
 
 ## Semana 5 — Observabilidad, rendimiento y escalabilidad
 
