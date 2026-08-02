@@ -73,6 +73,11 @@ class ExtraerResumenFiscalTests(unittest.TestCase):
         self.assertEqual(resultado["correo"], "contacto@empresa.com")
         self.assertEqual(resultado["giro"], "Venta de repuestos automotrices")
 
+    def test_extrae_otros_cargos_por_propina(self):
+        texto = "SUBTOTAL: $100.00\nPROPINA: $10.00\nTOTAL: $110.00"
+        resultado = extraer_resumen_fiscal(texto)
+
+        self.assertEqual(resultado["otros_cargos"], "10.00")
     def test_campos_ausentes_quedan_en_none(self):
         resultado = extraer_resumen_fiscal("Texto sin ningún dato fiscal relevante.")
 
