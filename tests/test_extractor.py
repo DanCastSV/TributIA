@@ -23,6 +23,12 @@ class ExtraerMontosTests(unittest.TestCase):
         self.assertIn("$160.49", montos)
         self.assertIn("$1,395.05", montos)
 
+    def test_encuentra_montos_sin_decimales(self):
+        texto = "El total a pagar es $50 sin centavos."
+        montos = extraer_montos(texto)
+
+        self.assertIn("$50", montos)
+
     def test_texto_sin_montos_devuelve_lista_vacia(self):
         self.assertEqual(extraer_montos("Documento sin ningún número de dinero."), [])
 
