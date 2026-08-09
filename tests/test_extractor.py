@@ -2,6 +2,7 @@
 Pruebas unitarias para core/ia/extractor.py: extracción por regex de
 montos, identificadores (NIT/DUI) y datos fiscales (subtotal, IVA, total,
 NRC, teléfono, correo, giro) desde el texto plano de un documento.
+prueba
 """
 
 import unittest
