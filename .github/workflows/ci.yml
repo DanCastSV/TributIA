@@ -30,5 +30,13 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
+      - name: Recolectar archivos estáticos
+        # Necesario porque STORAGES usa CompressedManifestStaticFilesStorage
+        # (whitenoise, agregado en Semana 4): cualquier template que use
+        # {% static %} (ej. login.html) necesita el manifest generado por
+        # collectstatic, o falla con "Missing staticfiles manifest entry".
+        # En Docker esto ya corre en el CMD del Dockerfile; en CI no corría.
+        run: python manage.py collectstatic --noinput
+
       - name: Ejecutar migraciones y pruebas
         run: python manage.py test -v 2
