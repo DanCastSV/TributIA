@@ -89,6 +89,7 @@ def analizar_documento_api(request):
     """
 
     if not request.user.is_authenticated:
+        logger.warning("solicitud_rechazada", extra={"tipo_error": "no_autenticado"})
         return JsonResponse({
             "error": "no_autenticado",
             "detalle": "Debes iniciar sesión para usar este endpoint.",
@@ -97,6 +98,7 @@ def analizar_documento_api(request):
     archivo = request.FILES.get("archivo")
 
     if not archivo:
+        logger.warning("solicitud_rechazada", extra={"tipo_error": "archivo_faltante"})
         return JsonResponse({
             "error": "archivo_faltante",
             "detalle": 'Debes enviar un archivo en el campo "archivo" (multipart/form-data).',
@@ -104,6 +106,9 @@ def analizar_documento_api(request):
 
     es_valido, mensaje = validar_archivo(archivo)
     if not es_valido:
+        # No se loguea `mensaje` completo ni el nombre real del archivo:
+        # podría contener datos que el usuario puso en el nombre del archivo.
+        logger.warning("solicitud_rechazada", extra={"tipo_error": "archivo_invalido"})
         return JsonResponse({
             "error": "archivo_invalido",
             "detalle": mensaje,
@@ -124,8 +129,11 @@ def analizar_documento_api(request):
             "error": "documento_no_tributario",
             "detalle": str(e),
         }, status=422)
-    except Exception:
-        logger.exception("Error inesperado analizando documento %s vía API", doc.id)
+    except Exception as e:
+        logger.exception("analisis_fallido_inesperado", extra={
+            "documento_id": doc.id,
+            "tipo_error": type(e).__name__,
+        })
         doc.estado = "error"
         doc.save()
         return JsonResponse({

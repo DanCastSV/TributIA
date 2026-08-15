@@ -1,0 +1,116 @@
+{
+  "resultado": {
+    "url": "http://localhost:8000/api/v1/health/",
+    "metodo": "GET",
+    "n": 20,
+    "p50_ms": 12.1,
+    "p95_ms": 35.6,
+    "max_ms": 86.1,
+    "min_ms": 10.6,
+    "promedio_ms": 17.9,
+    "tasa_error_pct": 0.0,
+    "errores": 0
+  },
+  "detalles": [
+    {
+      "n": 1,
+      "status": 200,
+      "duracion_ms": 86.1
+    },
+    {
+      "n": 2,
+      "status": 200,
+      "duracion_ms": 11.8
+    },
+    {
+      "n": 3,
+      "status": 200,
+      "duracion_ms": 10.6
+    },
+    {
+      "n": 4,
+      "status": 200,
+      "duracion_ms": 11.0
+    },
+    {
+      "n": 5,
+      "status": 200,
+      "duracion_ms": 11.9
+    },
+    {
+      "n": 6,
+      "status": 200,
+      "duracion_ms": 11.2
+    },
+    {
+      "n": 7,
+      "status": 200,
+      "duracion_ms": 24.0
+    },
+    {
+      "n": 8,
+      "status": 200,
+      "duracion_ms": 10.8
+    },
+    {
+      "n": 9,
+      "status": 200,
+      "duracion_ms": 13.4
+    },
+    {
+      "n": 10,
+      "status": 200,
+      "duracion_ms": 14.7
+    },
+    {
+      "n": 11,
+      "status": 200,
+      "duracion_ms": 12.9
+    },
+    {
+      "n": 12,
+      "status": 200,
+      "duracion_ms": 11.7
+    },
+    {
+      "n": 13,
+      "status": 200,
+      "duracion_ms": 20.5
+    },
+    {
+      "n": 14,
+      "status": 200,
+      "duracion_ms": 32.9
+    },
+    {
+      "n": 15,
+      "status": 200,
+      "duracion_ms": 12.2
+    },
+    {
+      "n": 16,
+      "status": 200,
+      "duracion_ms": 10.7
+    },
+    {
+      "n": 17,
+      "status": 200,
+      "duracion_ms": 11.1
+    },
+    {
+      "n": 18,
+      "status": 200,
+      "duracion_ms": 17.0
+    },
+    {
+      "n": 19,
+      "status": 200,
+      "duracion_ms": 12.9
+    },
+    {
+      "n": 20,
+      "status": 200,
+      "duracion_ms": 11.4
+    }
+  ]
+}

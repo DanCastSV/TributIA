@@ -49,6 +49,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
+    'core.middleware.RequestLoggingMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -56,6 +57,46 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+# Logging estructurado (Semana 5). Antes de esto, con DEBUG=False (ej.
+# dentro del contenedor Docker) los logs no aparecían en ningún lado: el
+# LOGGING por defecto de Django solo activa su handler de consola cuando
+# DEBUG=True (ver docs/despliegue-semana4.md §9.3). Esta configuración
+# reemplaza ese comportamiento y siempre escribe a stdout en JSON,
+# independientemente de DEBUG, para que sea visible con `docker compose
+# logs` en cualquier ambiente.
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'filters': {
+        'request_id': {
+            '()': 'core.logging_context.RequestIdFilter',
+        },
+    },
+    'formatters': {
+        'json': {
+            '()': 'core.logging_utils.JSONFormatter',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'json',
+            'filters': ['request_id'],
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'WARNING',
+            'propagate': False,
+        },
+    },
+}
 
 ROOT_URLCONF = 'tributia_project.urls'
 

@@ -12,9 +12,9 @@ genai.configure(
     api_key=settings.GEMINI_API_KEY
 )
 
-modelo = genai.GenerativeModel(
-    "models/gemini-2.5-flash-lite"
-)
+MODEL_NAME = "models/gemini-2.5-flash-lite"
+
+modelo = genai.GenerativeModel(MODEL_NAME)
 
 MAX_CARACTERES_TEXTO = 8000
 

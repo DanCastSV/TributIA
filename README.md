@@ -231,6 +231,22 @@ docker compose up -d --build
 
 Levanta dos servicios: `db` (PostgreSQL 16) y `web` (Django + gunicorn + whitenoise, `DEBUG=False`) en `http://localhost:8000/`. Migraciones y `collectstatic` corren automáticamente al iniciar el contenedor `web`, ya contra PostgreSQL. Ver `Dockerfile`, `docker-compose.yml` y el detalle completo (decisiones, evidencia de build/run, migración a Postgres, errores encontrados y corregidos, plan de infraestructura y costos) en [`docs/despliegue-semana4.md`](docs/despliegue-semana4.md).
 
+### Observabilidad y medición de rendimiento (Semana 5)
+
+Cada request queda registrada en JSON estructurado en stdout (`docker compose logs web` o la consola de `runserver`), correlacionada por `request_id`:
+
+```bash
+docker compose logs -f web
+```
+
+Para la línea base de rendimiento (p50/p95/máximo/tasa de error) contra un endpoint, sin dependencias nuevas:
+
+```bash
+python scripts/medir_rendimiento.py --url http://localhost:8000/api/v1/health/ --n 20
+```
+
+Detalle completo (preguntas de observabilidad, campos registrados, escenarios de medición, cuello de botella identificado y plan de escalabilidad) en [`docs/observabilidad-semana5.md`](docs/observabilidad-semana5.md).
+
 ### Pruebas automatizadas
 
 ```bash

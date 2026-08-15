@@ -37,9 +37,10 @@
 
 ## Semana 5 — Observabilidad, rendimiento y escalabilidad
 
-- [ ] Agregar logging estructurado por etapa del pipeline (OCR, spaCy, Gemini) con tiempos de ejecución.
-- [ ] Crear endpoint `/health/` que valide conexión a BD, disponibilidad de Gemini y Tesseract.
-- [ ] Agregar métrica de consumo diario de la cuota de Gemini.
+- [x] Agregar logging estructurado por etapa del pipeline (OCR, spaCy, Gemini) con tiempos de ejecución. `core/middleware.py` (por request, con `request_id`) + instrumentación de `core/services/analizador.py` (por etapa) + `LOGGING` en JSON en `settings.py`, correlacionados y visibles con cualquier valor de `DEBUG`. Ver `docs/observabilidad-semana5.md`.
+- [x] ~~Crear endpoint `/health/`~~ — ya existía desde Semana 2 (`/api/v1/health/`, valida BD/Tesseract/`GEMINI_API_KEY`); esta línea del plan estaba desactualizada.
+- [ ] Agregar métrica de consumo diario de la cuota de Gemini. Sigue pendiente.
+- [x] Medir línea base de rendimiento (`scripts/medir_rendimiento.py`, p50/p95/máximo/tasa de error) y documentar cuello de botella + plan de escalabilidad. Ver `docs/observabilidad-semana5.md`.
 - [ ] Evaluar cacheo de resultados de análisis por hash de documento para reducir llamadas repetidas a Gemini.
 
 ## Semana 6 — Seguridad, documentación final y defensa técnica

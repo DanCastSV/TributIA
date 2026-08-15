@@ -1,6 +1,10 @@
+import logging
+import time
 from decimal import Decimal, InvalidOperation
 
 from core.ocr_utils import extraer_texto_documento
+
+logger = logging.getLogger("core.services.analizador")
 
 
 class DocumentoNoTributarioError(Exception):
@@ -18,11 +22,16 @@ from core.ia.spacy_processor import (
 )
 
 from core.ia.gemini_client import (
-    analizar_documento_con_gemini
+    analizar_documento_con_gemini,
+    MODEL_NAME,
 )
 
 from core.models import AnalisisDocumento, EventoCalendario
 from datetime import datetime as _dt
+
+
+def _duracion_ms(inicio):
+    return round((time.monotonic() - inicio) * 1000, 1)
 
 
 def _parsear_fecha(texto):
@@ -76,27 +85,34 @@ def calcular_confianza(analisis_gemini):
 
 def analizar_documento(documento):
 
-    print("PASO 1 - Extrayendo texto")
+    documento_id = documento.id
+    inicio_total = time.monotonic()
+    logger.info("analisis_iniciado", extra={"documento_id": documento_id})
 
+    inicio = time.monotonic()
     texto = extraer_texto_documento(
         documento.archivo.path
     )
-
-    print("PASO 2 - Extrayendo montos")
+    logger.info("etapa_completada", extra={
+        "documento_id": documento_id,
+        "etapa": "extraccion_texto",
+        "duracion_ms": _duracion_ms(inicio),
+        "caracteres_extraidos": len(texto or ""),
+    })
 
     montos = extraer_montos(texto)
 
-    print("PASO 3 - Extrayendo identificadores")
-
     ids = extraer_identificadores(texto)
-
-    print("PASO 4 - Resumen fiscal")
 
     resumen = extraer_resumen_fiscal(texto)
 
-    print("PASO 5 - Procesamiento spaCy")
-
+    inicio = time.monotonic()
     entidades = analizar_entidades(texto)
+    logger.info("etapa_completada", extra={
+        "documento_id": documento_id,
+        "etapa": "spacy",
+        "duracion_ms": _duracion_ms(inicio),
+    })
 
     nit_detectado = (
         ids.get("nit_tradicional", [None])[0]
@@ -104,8 +120,7 @@ def analizar_documento(documento):
         else None
     )
 
-    print("PASO 6 - Generando análisis con Gemini")
-
+    inicio = time.monotonic()
     analisis_gemini = analizar_documento_con_gemini(
         texto,
         {
@@ -119,9 +134,14 @@ def analizar_documento(documento):
             "total": resumen.get("total"),
         }
     )
+    logger.info("etapa_completada", extra={
+        "documento_id": documento_id,
+        "etapa": "gemini",
+        "modelo": MODEL_NAME,
+        "duracion_ms": _duracion_ms(inicio),
+    })
 
     es_tributario = analisis_gemini.get("es_documento_tributario")
-    print(f"PASO 6b - Gemini resultado: es_documento_tributario={es_tributario!r}")
 
     # Rechazar ANTES de guardar si Gemini determina que no es tributario
     if es_tributario is False:
@@ -136,9 +156,11 @@ def analizar_documento(documento):
             or analisis_gemini.get("recomendacion")
             or "El documento no corresponde a un documento tributario válido en El Salvador."
         )
+        logger.warning("analisis_rechazado", extra={
+            "tipo_error": "documento_no_tributario",
+            "duracion_total_ms": _duracion_ms(inicio_total),
+        })
         raise DocumentoNoTributarioError(motivo)
-
-    print("PASO 7 - Guardando análisis")
 
     # Gemini como fuente principal de entidades; spaCy/regex como fallback
     def _primero(*valores):
@@ -273,10 +295,12 @@ def analizar_documento(documento):
             }
         )
 
-    print("PASO 8 - Actualizando documento")
-
     documento.estado = "analizado"
 
     documento.save()
 
-    print("PASO 9 - Finalizado")
+    logger.info("analisis_completado", extra={
+        "documento_id": documento_id,
+        "duracion_total_ms": _duracion_ms(inicio_total),
+        "confianza_clasificacion": confianza,
+    })
