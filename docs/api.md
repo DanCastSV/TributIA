@@ -78,9 +78,9 @@ Endpoint principal de IA. Sube un documento tributario y ejecuta el pipeline com
 
 Requiere **sesión de Django autenticada** (el mismo login que usa la interfaz web en `/login/`). El endpoint asocia el documento al usuario de la sesión (`request.user`), por lo que no acepta llamadas anónimas.
 
-Por ser una API pensada para clientes externos (curl/Postman), la vista está marcada `@csrf_exempt` — el login inicial sí requiere CSRF token (es un formulario normal de Django), pero las llamadas subsecuentes a la API dentro de esa sesión no lo requieren. Esta es una decisión consciente de alcance para Semana 2; en Semana 6 (seguridad) se evaluará reemplazar la autenticación por sesión con un esquema de token dedicado para la API.
+**Desde una auditoría de seguridad (2026-08-15, hallazgo V-01)**: este endpoint ya **no** tiene `@csrf_exempt`. Antes lo tenía como decisión consciente de alcance para Semana 2, pero al depender de la cookie de sesión para autenticar, eso permitía que un sitio externo forzara al navegador de un usuario autenticado a llamarlo (CSRF real, confirmado con una prueba). Ahora, además de la cookie de sesión, **cada llamada a la API debe incluir el token CSRF** (header `X-CSRFToken` o campo `csrfmiddlewaretoken`) — igual que cualquier otra vista autenticada por sesión en Django. En Semana 6 se sigue evaluando reemplazar esto por un esquema de token dedicado para clientes puramente externos (sin cookies).
 
-**Cómo obtener una sesión con curl:**
+**Cómo obtener una sesión y el token CSRF con curl:**
 
 ```bash
 # 1. Obtener cookie CSRF inicial
@@ -92,7 +92,12 @@ curl -s -b cookies.txt -c cookies.txt -X POST \
   -d "username=TU_USUARIO&password=TU_PASSWORD&csrfmiddlewaretoken=$CSRF" \
   -e "http://127.0.0.1:8000/login/" \
   http://127.0.0.1:8000/login/
+
+# 3. El token CSRF puede haber rotado tras el login; volver a leerlo de cookies.txt
+CSRF=$(grep csrftoken cookies.txt | awk '{print $7}')
 ```
+
+Cada llamada posterior a `/api/v1/analizar-documento/` debe incluir `-H "X-CSRFToken: $CSRF"` (ver ejemplos abajo).
 
 ### Payload de entrada (`multipart/form-data`)
 

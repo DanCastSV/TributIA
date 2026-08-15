@@ -89,7 +89,7 @@ Documentos
 
                     {% if doc.archivo %}
                     <a
-                        href="{{ doc.archivo.url }}"
+                        href="{% url 'descargar_documento' doc.id %}"
                         target="_blank"
                         class="btn-secondary">
 

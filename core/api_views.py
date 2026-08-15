@@ -10,7 +10,6 @@ import logging
 from django.conf import settings
 from django.db import connection
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from core.models import AnalisisDocumento, DocumentoTributario
@@ -75,7 +74,6 @@ def metadata(request):
     })
 
 
-@csrf_exempt
 @require_http_methods(["POST"])
 def analizar_documento_api(request):
     """
@@ -85,7 +83,12 @@ def analizar_documento_api(request):
         archivo (obligatorio): PDF, PNG, JPG o JPEG, máximo 20MB.
         nombre (opcional): nombre a mostrar; si se omite se usa el del archivo.
 
-    Requiere sesión autenticada (login previo vía /login/).
+    Requiere sesión autenticada (login previo vía /login/) Y el token CSRF
+    de esa sesión (ver docs/api.md) — se quitó @csrf_exempt (hallazgo V-01
+    del informe de seguridad de 2026-08-15): al depender de la cookie de
+    sesión para autenticar, este endpoint necesita la misma protección
+    CSRF que cualquier otra vista autenticada por sesión, o cualquier sitio
+    externo podría forzar al navegador de un usuario logueado a llamarlo.
     """
 
     if not request.user.is_authenticated:

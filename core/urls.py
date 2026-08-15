@@ -85,6 +85,12 @@ path(
     views.eliminar_documento,
     name='eliminar_documento'
 ),
+
+path(
+    'documento/<int:documento_id>/descargar/',
+    views.descargar_documento,
+    name='descargar_documento'
+),
 path(
     'centro-analisis/',
     views.centro_analisis,

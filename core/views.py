@@ -1,11 +1,12 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from django.http import JsonResponse
+from django.http import JsonResponse, FileResponse, Http404
 from django.core.paginator import Paginator
 from django.views.decorators.http import require_http_methods
 import json
 import calendar as cal_lib
+import os
 from datetime import date, datetime
 from django.db.models import Sum, Q
 
@@ -514,6 +515,36 @@ def detalle_documento(request, documento_id):
             'analisis': analisis
         }
     )
+
+
+@login_required
+def descargar_documento(request, documento_id):
+    """
+    Sirve el archivo de un documento solo a su propietario. Reemplaza el
+    uso directo de `documento.archivo.url` en los templates: esa URL
+    apunta a MEDIA_ROOT, que no tiene ninguna verificación de dueño por sí
+    misma (solo esta vista la tiene, vía el filtro usuario=request.user).
+    """
+    documento = get_object_or_404(
+        DocumentoTributario,
+        id=documento_id,
+        usuario=request.user
+    )
+
+    if not documento.archivo or not documento.archivo.name or not os.path.exists(documento.archivo.path):
+        raise Http404("Archivo no encontrado")
+
+    nombre_archivo = os.path.basename(documento.archivo.name)
+
+    response = FileResponse(
+        documento.archivo.open('rb'),
+        as_attachment=False,
+        filename=nombre_archivo,
+    )
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, max-age=0, no-store'
+    return response
+
 
 @login_required
 def centro_analisis(request):

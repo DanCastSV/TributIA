@@ -28,7 +28,7 @@ Análisis Documento
 
         {% if documento.archivo %}
         <a
-            href="{{ documento.archivo.url }}"
+            href="{% url 'descargar_documento' documento.id %}"
             target="_blank"
             class="btn-primary">
 

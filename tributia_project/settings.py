@@ -27,7 +27,11 @@ load_dotenv(BASE_DIR / '.env')
 SECRET_KEY = os.environ['SECRET_KEY']
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = os.environ.get('DEBUG', 'True') == 'True'
+# Fail-closed a propósito: si DEBUG no está definido en el entorno (ej.
+# una variable olvidada en un despliegue nuevo), el valor seguro por
+# defecto es False, no True. Antes era al revés (fail-open) — ver
+# hallazgo V-05 del informe de seguridad de 2026-08-15.
+DEBUG = os.environ.get('DEBUG', 'False') == 'True'
 
 ALLOWED_HOSTS = [
     h.strip() for h in os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()

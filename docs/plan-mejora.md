@@ -45,7 +45,14 @@
 
 ## Semana 6 — Seguridad, documentación final y defensa técnica
 
-- [ ] Auditar y eliminar cualquier credencial hardcodeada remanente fuera de `.env`.
-- [ ] Agregar validaciones de permisos para que cada usuario solo acceda a sus propios documentos/eventos.
+- [x] Auditar y eliminar cualquier credencial hardcodeada remanente fuera de `.env`. Ver `docs/seguridad-2026-08-15.md` — no se encontraron credenciales hardcodeadas nuevas; los secretos ya vivían solo en `.env`.
+- [x] Agregar validaciones de permisos para que cada usuario solo acceda a sus propios documentos/eventos. Ya estaba cubierto en las vistas web (verificado en la sesión del 2026-08-08); se agregó además una vista de **descarga autenticada** (`/documento/<id>/descargar/`) que reemplaza el enlace directo a `documento.archivo.url`, con prueba de que un usuario no puede descargar el documento de otro (404). Ver `docs/seguridad-2026-08-15.md`.
+- [x] Corregir bypass de CSRF en la API interna (`@csrf_exempt` en `analizar_documento_api`) y agregar pruebas de CSRF (`tests/test_api_seguridad.py`, 5 tests nuevos).
+- [x] `DEBUG` fail-closed por defecto (antes fail-open: `True` si la variable no existía).
+- [x] Actualizar Django a 6.0.7 y Pillow a 12.3.0 (parches de seguridad).
 - [ ] Consolidar README y `docs/` con el estado final del proyecto.
 - [ ] Preparar demo en vivo: identificar puntos frágiles del pipeline (ej. límite de cuota de Gemini) y tener un plan B si falla durante la defensa (documento de respaldo ya analizado, capturas de pantalla).
+
+### Pendiente de un informe de seguridad externo (2026-08-15)
+
+Se recibió un informe de seguridad de terceros sobre el repositorio (público en GitHub). Se verificaron sus hallazgos contra el código real antes de actuar y se corrigió el "primer parche" (los 4 de mayor impacto). El resto queda documentado como trabajo futuro en `docs/seguridad-2026-08-15.md`: validación de contenido real de archivos subidos (no solo extensión), rate limiting/cuotas antiabuso, validación estructurada de la salida de Gemini (defensa contra prompt injection), revisión profesional de las reglas fiscales hardcodeadas en `core/datos_el_salvador.py`, migración al SDK `google-genai`, y endurecimiento del `Dockerfile` (usuario no-root, build multi-stage).
