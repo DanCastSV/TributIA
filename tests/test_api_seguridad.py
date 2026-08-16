@@ -12,6 +12,7 @@ import shutil
 import tempfile
 from unittest.mock import patch
 
+import fitz
 from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
@@ -33,7 +34,11 @@ class AnalizarDocumentoApiCsrfTests(TestCase):
         self.client.login(username="usuario_csrf", password="clave12345")
 
     def _archivo(self):
-        return SimpleUploadedFile("factura.pdf", b"contenido-pdf-simulado", content_type="application/pdf")
+        documento = fitz.open()
+        documento.new_page().insert_text((72, 72), "FACTURA TOTAL 113")
+        contenido = documento.tobytes()
+        documento.close()
+        return SimpleUploadedFile("factura.pdf", contenido, content_type="application/pdf")
 
     def test_sesion_valida_sin_token_csrf_devuelve_403(self):
         response = self.client.post(

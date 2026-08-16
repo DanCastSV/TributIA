@@ -1,14 +1,12 @@
 import logging
 
-import google.generativeai as genai
-from django.conf import settings
+from google.genai import types
 
-from core.models import AnalisisDocumento, MensajeConversacion, PerfilTributario
 from core.datos_el_salvador import DATOS_EL_SALVADOR
+from core.ia.gemini_client import MODEL_NAME, cliente
+from core.models import AnalisisDocumento, MensajeConversacion, PerfilTributario
 
 logger = logging.getLogger(__name__)
-
-genai.configure(api_key=settings.GEMINI_API_KEY)
 
 # Cuántos pares usuario/asistente atrás incluir como memoria de la conversación.
 MAX_PARES_HISTORIAL = 10
@@ -173,7 +171,10 @@ def _historial_gemini(conversacion):
     history = []
     for msg in mensajes:
         role = "user" if msg.rol == "usuario" else "model"
-        history.append({"role": role, "parts": [msg.contenido]})
+        history.append(types.Content(
+            role=role,
+            parts=[types.Part.from_text(text=msg.contenido)],
+        ))
 
     return history
 
@@ -191,18 +192,32 @@ def responder_con_gemini(conversacion, pregunta):
         contexto_docs   = _contexto_documentos(usuario)
         historial       = _historial_gemini(conversacion)
 
-        modelo = genai.GenerativeModel(
-            "models/gemini-2.5-flash-lite",
-            system_instruction=_sistema(contexto_perfil, contexto_docs)
+        contenidos = [
+            *historial,
+            types.Content(
+                role="user",
+                parts=[types.Part.from_text(text=pregunta)],
+            ),
+        ]
+        respuesta = cliente.models.generate_content(
+            model=MODEL_NAME,
+            contents=contenidos,
+            config=types.GenerateContentConfig(
+                system_instruction=_sistema(contexto_perfil, contexto_docs),
+                temperature=0.2,
+                max_output_tokens=1024,
+            ),
         )
 
-        chat = modelo.start_chat(history=historial)
-        respuesta = chat.send_message(pregunta)
-
+        if not respuesta.text:
+            raise ValueError("Gemini devolvió una respuesta vacía")
         return respuesta.text
 
     except Exception as e:
-        logger.error(f"Error en asistente Gemini: {str(e)}")
+        logger.error(
+            "gemini_asistente_fallido",
+            extra={"tipo_error": type(e).__name__},
+        )
         return (
             "Lo siento, ocurrió un error al procesar tu consulta. "
             "Por favor intenta de nuevo en un momento."

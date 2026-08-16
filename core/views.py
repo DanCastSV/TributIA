@@ -1,28 +1,33 @@
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
-from django.contrib import messages
-from django.http import JsonResponse, FileResponse, Http404
-from django.core.paginator import Paginator
-from django.views.decorators.http import require_http_methods
-import json
 import calendar as cal_lib
+import json
+import logging
 import os
 from datetime import date, datetime
-from django.db.models import Sum, Q
 
-from .forms import PerfilTributarioForm, RegistroUsuarioForm, DocumentoForm
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
+from django.db.models import Q, Sum
+from django.http import FileResponse, Http404, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_http_methods
+
+from core.datos_el_salvador import DATOS_EL_SALVADOR
+from core.rate_limit import limitar_solicitudes
+from core.services.analizador import DocumentoNoTributarioError, analizar_documento
+from core.services.asistente import responder_con_gemini
+
+from .forms import DocumentoForm, PerfilTributarioForm, RegistroUsuarioForm
 from .models import (
-    PerfilTributario,
-    DocumentoTributario,
     AnalisisDocumento,
     ConversacionAsistente,
-    MensajeConversacion,
+    DocumentoTributario,
     EventoCalendario,
+    MensajeConversacion,
+    PerfilTributario,
 )
 
-from core.services.analizador import analizar_documento, DocumentoNoTributarioError
-from core.services.asistente import responder_con_gemini
-from core.datos_el_salvador import DATOS_EL_SALVADOR
+logger = logging.getLogger(__name__)
 
 _MESES_ES = [
     '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -330,6 +335,12 @@ def dashboard(request):
 def home(request):
     return render(request, 'home.html')
 
+@limitar_solicitudes(
+    ambito='registro',
+    limite=5,
+    ventana_segundos=300,
+    clave='ip',
+)
 def registro(request):
 
     if request.method == 'POST':
@@ -421,6 +432,12 @@ def editar_perfil(request):
     )
 
 @login_required
+@limitar_solicitudes(
+    ambito='documentos-web',
+    limite=6,
+    ventana_segundos=300,
+    clave='usuario',
+)
 def documentos(request):
 
     if request.method == 'POST':
@@ -444,7 +461,11 @@ def documentos(request):
                     request,
                     f'El documento "{doc.nombre}" fue rechazado: {e} No se guardó en el sistema.'
                 )
-            except Exception:
+            except Exception as e:
+                logger.error(
+                    'analisis_web_fallido',
+                    extra={'documento_id': doc.id, 'tipo_error': type(e).__name__},
+                )
                 doc.estado = 'error'
                 doc.save()
                 messages.error(request, f'Ocurrió un error al analizar "{doc.nombre}". Inténtalo de nuevo.')
@@ -483,8 +504,11 @@ def eliminar_documento(request, documento_id):
     if documento.archivo:
         try:
             documento.archivo.delete(save=False)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                'eliminacion_archivo_fallida',
+                extra={'documento_id': documento.id, 'tipo_error': type(e).__name__},
+            )
     documento.delete()
     return redirect('documentos')
 
@@ -961,6 +985,13 @@ def asistente_ia(request):
 
 @login_required
 @require_http_methods(["POST"])
+@limitar_solicitudes(
+    ambito='chat-gemini',
+    limite=12,
+    ventana_segundos=300,
+    clave='usuario',
+    json=True,
+)
 def enviar_mensaje(request):
     """Endpoint AJAX: recibe pregunta, llama a Gemini, devuelve JSON."""
     try:
@@ -972,6 +1003,8 @@ def enviar_mensaje(request):
 
     if not pregunta:
         return JsonResponse({"error": "Pregunta vacía"}, status=400)
+    if len(pregunta) > 2000:
+        return JsonResponse({"error": "La pregunta es demasiado larga"}, status=400)
 
     conversacion = get_object_or_404(
         ConversacionAsistente,

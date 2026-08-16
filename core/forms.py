@@ -1,10 +1,10 @@
 from django import forms
-from django.contrib.auth.models import User
 from django.contrib.auth.forms import UserCreationForm
+from django.contrib.auth.models import User
 from django.forms import ModelForm
-from .models import PerfilTributario
-from .models import DocumentoTributario
 
+from .models import DocumentoTributario, PerfilTributario
+from .ocr_utils import validar_archivo
 
 
 class RegistroUsuarioForm(UserCreationForm):
@@ -103,8 +103,23 @@ class DocumentoForm(forms.ModelForm):
             }),
         }
 
-from django.contrib.auth.forms import AuthenticationForm, PasswordResetForm, SetPasswordForm
+    def clean_archivo(self):
+        archivo = self.cleaned_data.get('archivo')
+        if archivo is None:
+            return archivo
+
+        es_valido, mensaje = validar_archivo(archivo)
+        if not es_valido:
+            raise forms.ValidationError(mensaje)
+        return archivo
+
 from django import forms
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordResetForm,
+    SetPasswordForm,
+)
+
 
 class LoginForm(AuthenticationForm):
 

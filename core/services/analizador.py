@@ -11,23 +11,19 @@ class DocumentoNoTributarioError(Exception):
     """Se lanza cuando Gemini determina que el documento no es tributario."""
     pass
 
-from core.ia.extractor import (
-    extraer_montos,
-    extraer_identificadores,
-    extraer_resumen_fiscal
-)
-
-from core.ia.spacy_processor import (
-    analizar_entidades
-)
-
-from core.ia.gemini_client import (
-    analizar_documento_con_gemini,
-    MODEL_NAME,
-)
-
-from core.models import AnalisisDocumento, EventoCalendario
 from datetime import datetime as _dt
+
+from core.ia.extractor import (
+    extraer_identificadores,
+    extraer_montos,
+    extraer_resumen_fiscal,
+)
+from core.ia.gemini_client import (
+    MODEL_NAME,
+    analizar_documento_con_gemini,
+)
+from core.ia.spacy_processor import analizar_entidades
+from core.models import AnalisisDocumento, EventoCalendario
 
 
 def _duracion_ms(inicio):
@@ -148,8 +144,11 @@ def analizar_documento(documento):
         if documento.archivo:
             try:
                 documento.archivo.delete(save=False)
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "eliminacion_archivo_rechazado_fallida",
+                    extra={"documento_id": documento_id, "tipo_error": type(e).__name__},
+                )
         documento.delete()
         motivo = (
             analisis_gemini.get("justificacion_deducible")

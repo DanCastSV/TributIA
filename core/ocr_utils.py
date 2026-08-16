@@ -3,13 +3,15 @@ Utilidades para extracción de texto desde PDF e imágenes
 """
 
 import glob
+import io
+import logging
+import os
 import shutil
 
+import fitz
 import pytesseract
-from pdf2image import convert_from_path
-from PIL import Image
-import os
-import logging
+from pdf2image import convert_from_path, pdfinfo_from_path
+from PIL import Image, UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 
@@ -83,20 +85,44 @@ def extraer_texto_pdf(ruta_pdf, dpi=300):
         Texto extraído del PDF
     """
     try:
-        logger.info(f"Procesando PDF: {ruta_pdf}")
-        imagenes = convert_from_path(ruta_pdf, dpi=dpi, poppler_path=_poppler_bin)
+        logger.info("procesando_pdf")
+        total_paginas = int(
+            pdfinfo_from_path(ruta_pdf, poppler_path=_poppler_bin).get('Pages', 0)
+        )
+        if not 1 <= total_paginas <= 20:
+            raise ValueError("Cantidad de páginas no permitida")
+
         texto_completo = ""
 
-        for idx, imagen in enumerate(imagenes):
-            logger.info(f"Extrayendo página {idx + 1}/{len(imagenes)}")
-            texto = pytesseract.image_to_string(imagen, lang='spa', config=TESSERACT_CONFIG)
-            texto_completo += texto + "\n---PÁGINA {} FIN---\n".format(idx + 1)
+        # Renderizar una sola página a la vez evita cargar el PDF completo en
+        # memoria (20 páginas a 300 DPI pueden consumir cientos de MB).
+        for numero_pagina in range(1, total_paginas + 1):
+            imagenes = convert_from_path(
+                ruta_pdf,
+                dpi=dpi,
+                poppler_path=_poppler_bin,
+                first_page=numero_pagina,
+                last_page=numero_pagina,
+                thread_count=1,
+            )
+            if not imagenes:
+                raise ValueError("No fue posible renderizar una página del PDF")
+            imagen = imagenes[0]
+            try:
+                texto = pytesseract.image_to_string(
+                    imagen,
+                    lang='spa',
+                    config=TESSERACT_CONFIG,
+                )
+                texto_completo += texto + "\n---PÁGINA {} FIN---\n".format(numero_pagina)
+            finally:
+                imagen.close()
 
-        logger.info("✓ Extracción de PDF exitosa")
+        logger.info("extraccion_pdf_exitosa", extra={"paginas": total_paginas})
         return texto_completo.strip()
 
     except Exception as e:
-        logger.error(f"Error extrayendo PDF: {str(e)}")
+        logger.error("extraccion_pdf_fallida", extra={"tipo_error": type(e).__name__})
         return None
 
 
@@ -111,7 +137,7 @@ def extraer_texto_imagen(ruta_imagen):
         Texto extraído de la imagen
     """
     try:
-        logger.info(f"Procesando imagen: {ruta_imagen}")
+        logger.info("procesando_imagen")
 
         from PIL import ImageEnhance, ImageFilter
 
@@ -143,7 +169,7 @@ def extraer_texto_imagen(ruta_imagen):
         return texto.strip()
 
     except Exception as e:
-        logger.error(f"Error extrayendo imagen: {str(e)}")
+        logger.error("extraccion_imagen_fallida", extra={"tipo_error": type(e).__name__})
         return None
 
 
@@ -217,7 +243,7 @@ def validar_archivo(archivo):
     Returns:
         Tupla (es_válido, mensaje)
     """
-    extension = archivo.name.split('.')[-1].lower()
+    extension = archivo.name.rsplit('.', 1)[-1].lower()
     extensiones_permitidas = ['pdf', 'png', 'jpg', 'jpeg']
     
     if extension not in extensiones_permitidas:
@@ -227,5 +253,57 @@ def validar_archivo(archivo):
     tamaño_max = 20 * 1024 * 1024
     if archivo.size > tamaño_max:
         return False, f"Archivo demasiado grande. Máximo: 20MB"
-    
-    return True, "Archivo válido"
+
+    posicion_original = archivo.tell()
+    try:
+        archivo.seek(0)
+        contenido = archivo.read()
+
+        if not contenido:
+            return False, "El archivo está vacío"
+
+        if extension == 'pdf':
+            if not contenido.startswith(b'%PDF-'):
+                return False, "El contenido no corresponde a un PDF válido"
+
+            documento = None
+            try:
+                documento = fitz.open(stream=contenido, filetype='pdf')
+                if documento.is_encrypted:
+                    return False, "Los PDF protegidos con contraseña no son compatibles"
+                if documento.page_count < 1:
+                    return False, "El PDF no contiene páginas"
+                if documento.page_count > 20:
+                    return False, "El PDF supera el máximo de 20 páginas"
+            except Exception:
+                return False, "El contenido no corresponde a un PDF válido"
+            finally:
+                if documento is not None:
+                    documento.close()
+
+        else:
+            firma_correcta = (
+                contenido.startswith(b'\x89PNG\r\n\x1a\n')
+                if extension == 'png'
+                else contenido.startswith(b'\xff\xd8\xff')
+            )
+            if not firma_correcta:
+                return False, "El contenido no corresponde al tipo de imagen indicado"
+
+            try:
+                with Image.open(io.BytesIO(contenido)) as imagen:
+                    formato_esperado = 'PNG' if extension == 'png' else 'JPEG'
+                    if imagen.format != formato_esperado:
+                        return False, "El contenido no corresponde al tipo de imagen indicado"
+                    ancho, alto = imagen.size
+                    if ancho <= 0 or alto <= 0 or ancho > 12000 or alto > 12000:
+                        return False, "Las dimensiones de la imagen no son compatibles"
+                    if ancho * alto > 25_000_000:
+                        return False, "La imagen supera el máximo de 25 megapíxeles"
+                    imagen.verify()
+            except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError):
+                return False, "El contenido no corresponde a una imagen válida"
+
+        return True, "Archivo válido"
+    finally:
+        archivo.seek(posicion_original)

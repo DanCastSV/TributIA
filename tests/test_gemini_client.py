@@ -6,8 +6,14 @@ errores.
 """
 
 import unittest
+from unittest.mock import Mock, patch
 
-from core.ia.gemini_client import _extraer_json, _resultado_vacio
+from core.ia.gemini_client import (
+    _extraer_json,
+    _resultado_vacio,
+    _validar_respuesta,
+    analizar_documento_con_gemini,
+)
 
 
 class ExtraerJsonTests(unittest.TestCase):
@@ -60,6 +66,68 @@ class ResultadoVacioTests(unittest.TestCase):
         }
         for clave in claves_esperadas:
             self.assertIsNone(resultado[clave])
+
+
+def _respuesta_valida():
+    return {
+        "empresa": "ACME",
+        "cliente": None,
+        "tipo_documento": "Factura",
+        "fecha": "15/03/2026",
+        "numero_documento": "F-001",
+        "nit": None,
+        "direccion": None,
+        "resumen": "Factura de prueba.",
+        "es_documento_tributario": True,
+        "es_deducible": None,
+        "justificacion_deducible": None,
+        "subtotal": 100.0,
+        "iva": 13.0,
+        "total": 113.0,
+        "recomendacion": "Revisar el documento.",
+    }
+
+
+class ValidacionRespuestaGeminiTests(unittest.TestCase):
+    def test_acepta_respuesta_completa_con_tipos_validos(self):
+        self.assertEqual(_validar_respuesta(_respuesta_valida()), _respuesta_valida())
+
+    def test_rechaza_booleano_convertido_a_texto(self):
+        respuesta = _respuesta_valida()
+        respuesta["es_documento_tributario"] = "true"
+        with self.assertRaises(ValueError):
+            _validar_respuesta(respuesta)
+
+    def test_rechaza_monto_negativo(self):
+        respuesta = _respuesta_valida()
+        respuesta["total"] = -1
+        with self.assertRaises(ValueError):
+            _validar_respuesta(respuesta)
+
+    @patch("core.ia.gemini_client.cliente.models.generate_content")
+    def test_envia_schema_json_y_limite_de_tokens(self, generar):
+        generar.return_value = Mock(text=__import__('json').dumps(_respuesta_valida()))
+
+        resultado = analizar_documento_con_gemini("FACTURA TOTAL 113", {})
+
+        self.assertTrue(resultado["es_documento_tributario"])
+        config = generar.call_args.kwargs["config"]
+        self.assertEqual(config.response_mime_type, "application/json")
+        self.assertIsNotNone(config.response_json_schema)
+        self.assertNotIn("maxLength", __import__('json').dumps(config.response_json_schema))
+        self.assertLessEqual(config.max_output_tokens, 2048)
+
+    @patch("core.ia.gemini_client.cliente.models.generate_content")
+    def test_error_del_sdk_no_filtra_el_mensaje_interno(self, generar):
+        generar.side_effect = RuntimeError("api-key-super-secreta")
+
+        with self.assertLogs("core.ia.gemini_client", level="ERROR") as logs:
+            resultado = analizar_documento_con_gemini("FACTURA", {})
+
+        recomendacion = resultado["recomendacion"] or ""
+        self.assertNotIn("api-key-super-secreta", recomendacion)
+        self.assertIn("disponible", recomendacion.lower())
+        self.assertNotIn("api-key-super-secreta", " ".join(logs.output))
 
 
 if __name__ == "__main__":

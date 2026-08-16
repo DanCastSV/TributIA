@@ -14,6 +14,7 @@ from django.views.decorators.http import require_http_methods
 
 from core.models import AnalisisDocumento, DocumentoTributario
 from core.ocr_utils import _tesseract_cmd, validar_archivo
+from core.rate_limit import limitar_solicitudes
 from core.services.analizador import DocumentoNoTributarioError, analizar_documento
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,8 @@ def health(request):
         connection.ensure_connection()
         checks["base_datos"] = "ok"
         db_ok = True
-    except Exception:
+    except Exception as e:
+        logger.error("health_db_fallido", extra={"tipo_error": type(e).__name__})
         checks["base_datos"] = "error"
         db_ok = False
 
@@ -75,6 +77,13 @@ def metadata(request):
 
 
 @require_http_methods(["POST"])
+@limitar_solicitudes(
+    ambito='analizar-documento-api',
+    limite=6,
+    ventana_segundos=300,
+    clave='usuario',
+    json=True,
+)
 def analizar_documento_api(request):
     """
     Sube y analiza un documento tributario.

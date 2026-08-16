@@ -1,22 +1,93 @@
 import json
 import logging
 
-import google.generativeai as genai
 from django.conf import settings
+from google import genai
+from google.genai import types
 
 from core.datos_el_salvador import DATOS_EL_SALVADOR
 
 logger = logging.getLogger(__name__)
 
-genai.configure(
-    api_key=settings.GEMINI_API_KEY
+MODEL_NAME = "gemini-2.5-flash-lite"
+
+cliente = genai.Client(
+    api_key=settings.GEMINI_API_KEY,
+    http_options=types.HttpOptions(
+        timeout=30_000,
+        retry_options=types.HttpRetryOptions(
+            attempts=3,
+            initial_delay=0.5,
+            max_delay=4.0,
+        ),
+    ),
 )
 
-MODEL_NAME = "models/gemini-2.5-flash-lite"
-
-modelo = genai.GenerativeModel(MODEL_NAME)
-
 MAX_CARACTERES_TEXTO = 8000
+
+_CAMPOS_TEXTO = {
+    "empresa", "cliente", "tipo_documento", "fecha", "numero_documento",
+    "nit", "direccion", "resumen", "justificacion_deducible", "recomendacion",
+}
+_CAMPOS_BOOLEANOS = {"es_documento_tributario", "es_deducible"}
+_CAMPOS_NUMERICOS = {"subtotal", "iva", "total"}
+_CAMPOS_RESPUESTA = _CAMPOS_TEXTO | _CAMPOS_BOOLEANOS | _CAMPOS_NUMERICOS
+
+
+def _nullable(tipo, **restricciones):
+    return {
+        "anyOf": [
+            {"type": tipo, **restricciones},
+            {"type": "null"},
+        ]
+    }
+
+
+RESPUESTA_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": sorted(_CAMPOS_RESPUESTA),
+    "properties": {
+        **{campo: _nullable("string") for campo in _CAMPOS_TEXTO},
+        **{campo: _nullable("boolean") for campo in _CAMPOS_BOOLEANOS},
+        **{
+            campo: _nullable("number", minimum=0, maximum=1_000_000_000)
+            for campo in _CAMPOS_NUMERICOS
+        },
+    },
+}
+
+
+def _validar_respuesta(data):
+    """Valida tipos y límites antes de persistir una respuesta del modelo."""
+    if not isinstance(data, dict):
+        raise ValueError("La respuesta de Gemini no es un objeto")
+    if set(data) != _CAMPOS_RESPUESTA:
+        raise ValueError("La respuesta de Gemini no contiene el esquema esperado")
+
+    for campo in _CAMPOS_TEXTO:
+        valor = data[campo]
+        limite = 4000 if campo == "recomendacion" else 2000 if campo in {
+            "resumen", "justificacion_deducible"
+        } else 500
+        if valor is not None and (not isinstance(valor, str) or len(valor) > limite):
+            raise ValueError(f"Campo de texto inválido: {campo}")
+
+    for campo in _CAMPOS_BOOLEANOS:
+        valor = data[campo]
+        if valor is not None and not isinstance(valor, bool):
+            raise ValueError(f"Campo booleano inválido: {campo}")
+
+    for campo in _CAMPOS_NUMERICOS:
+        valor = data[campo]
+        if valor is not None and (
+            isinstance(valor, bool)
+            or not isinstance(valor, (int, float))
+            or not 0 <= valor <= 1_000_000_000
+        ):
+            raise ValueError(f"Campo numérico inválido: {campo}")
+
+    return data
 
 
 def _reglas_deduccion_texto():
@@ -139,12 +210,18 @@ Extrae los campos directamente del TEXTO REAL del documento. No uses los datos p
 """
 
     try:
-        respuesta = modelo.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
+        respuesta = cliente.models.generate_content(
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_json_schema=RESPUESTA_SCHEMA,
+                temperature=0.1,
+                max_output_tokens=2048,
+            ),
         )
 
-        data = _extraer_json(respuesta.text)
+        data = _validar_respuesta(_extraer_json(respuesta.text))
 
         return {
             # Entidades extraídas por Gemini (más precisas que spaCy)
@@ -167,5 +244,10 @@ Extrae los campos directamente del TEXTO REAL del documento. No uses los datos p
         }
 
     except Exception as e:
-        logger.error(f"Error en análisis IA con Gemini: {str(e)}")
-        return _resultado_vacio(f"Error al generar análisis IA: {str(e)}")
+        logger.error(
+            "gemini_analisis_fallido",
+            extra={"tipo_error": type(e).__name__},
+        )
+        return _resultado_vacio(
+            "El análisis con IA no está disponible temporalmente. Inténtalo de nuevo."
+        )
