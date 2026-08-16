@@ -8,13 +8,16 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q, Sum
-from django.http import FileResponse, Http404, JsonResponse
+from django.db.models.functions import TruncMonth
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
 from core.analysis_capacity import CapacidadAnalisisAgotada, reservar_capacidad_analisis
 from core.datos_el_salvador import DATOS_EL_SALVADOR
+from core.fechas_fiscales import fechas_fiscales_mes
 from core.rate_limit import limitar_solicitudes
+from core.services.reportes import generar_reporte_anual_pdf
 from core.services.analizador import DocumentoNoTributarioError, analizar_documento
 from core.services.asistente import responder_con_gemini
 
@@ -34,43 +37,6 @@ _MESES_ES = [
     '', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
-
-def _fechas_fiscales_mes(year, month):
-    """Devuelve las fechas fiscales fijas para el mes indicado."""
-    last_day = cal_lib.monthrange(year, month)[1]
-    eventos = [
-        {
-            'titulo': 'Vence retención ISR mensual',
-            'tipo': 'fiscal',
-            'id': None,
-            'descripcion': 'Enterar retenciones de ISR a empleados ante el Ministerio de Hacienda.',
-            'day': min(10, last_day),
-        },
-        {
-            'titulo': 'Vence declaración IVA (F-07)',
-            'tipo': 'fiscal',
-            'id': None,
-            'descripcion': 'Últimos 10 días hábiles del mes para presentar y pagar el IVA.',
-            'day': min(21, last_day),
-        },
-    ]
-    if month == 4:
-        eventos.append({
-            'titulo': 'Vence Declaración de Renta (F-11)',
-            'tipo': 'fiscal',
-            'id': None,
-            'descripcion': '120 días hábiles tras el cierre del ejercicio fiscal.',
-            'day': 30,
-        })
-    if month == 12:
-        eventos.append({
-            'titulo': 'Cierre del ejercicio fiscal',
-            'tipo': 'fiscal',
-            'id': None,
-            'descripcion': 'Fin del año fiscal. Todos los ingresos deben estar registrados.',
-            'day': 31,
-        })
-    return eventos
 
 def _calcular_consejo(total_documentos, total_analizados, total_tributarios,
                        total_deducibles, total_deducible_monto, total_pendientes,
@@ -270,7 +236,7 @@ def dashboard(request):
     for delta_mes in range(2):
         mes = (hoy.month - 1 + delta_mes) % 12 + 1
         year = hoy.year + ((hoy.month - 1 + delta_mes) // 12)
-        for ev in _fechas_fiscales_mes(year, mes):
+        for ev in fechas_fiscales_mes(year, mes):
             ev_date = date(year, mes, ev['day'])
             if ev_date >= hoy:
                 eventos_fiscales.append({
@@ -441,6 +407,11 @@ def editar_perfil(request):
 )
 def documentos(request):
 
+    try:
+        perfil = PerfilTributario.objects.get(usuario=request.user)
+    except PerfilTributario.DoesNotExist:
+        perfil = None
+
     if request.method == 'POST':
 
         form = DocumentoForm(
@@ -498,6 +469,7 @@ def documentos(request):
             'form': form,
             'documentos': page_obj,
             'page_obj': page_obj,
+            'perfil': perfil,
         }
     )
 
@@ -625,6 +597,7 @@ def centro_analisis(request):
     # Usa la tasa marginal del salario anual del usuario
     tasa_isr = 0
     salario_anual = 0
+    perfil = None
     try:
         perfil = PerfilTributario.objects.get(usuario=request.user)
         salario_anual = float(perfil.salario_mensual or 0) * 12
@@ -639,6 +612,34 @@ def centro_analisis(request):
 
     ahorro_isr = float(total_deducible) * (tasa_isr / 100)
     tiene_salario = salario_anual > 0
+
+    # ── Años disponibles para el reporte anual ─────────────────────
+    anios_disponibles = list(
+        analisis.dates('fecha_analisis', 'year', order='DESC')
+    )
+    anios_disponibles = [d.year for d in anios_disponibles]
+
+    # ── Tendencia mensual del año actual ───────────────────────────
+    anio_actual = date.today().year
+    por_mes = (
+        analisis.filter(fecha_analisis__year=anio_actual)
+        .annotate(mes=TruncMonth('fecha_analisis'))
+        .values('mes')
+        .annotate(
+            total_mes=Sum('total'),
+            deducible_mes=Sum('total', filter=Q(es_deducible=True)),
+        )
+    )
+    montos_por_mes = {p['mes'].month: float(p['total_mes'] or 0) for p in por_mes}
+    monto_maximo_mes = max(montos_por_mes.values()) if montos_por_mes else 0
+    tendencia_mensual = [
+        {
+            'mes': _MESES_ES[m][:3],
+            'monto': montos_por_mes.get(m, 0),
+            'pct': _pct(montos_por_mes.get(m, 0), monto_maximo_mes) if monto_maximo_mes else 0,
+        }
+        for m in range(1, 13)
+    ]
 
     # ── Tabla completa de análisis (paginada) ─────────────────────
     todos = analisis.select_related('documento').order_by('-fecha_analisis')
@@ -669,9 +670,29 @@ def centro_analisis(request):
         'tasa_isr':     tasa_isr,
         'ahorro_isr':   ahorro_isr,
         'tiene_salario': tiene_salario,
+        # Perfil (para prellenar el simulador)
+        'perfil': perfil,
+        # Reporte anual y tendencia
+        'anios_disponibles': anios_disponibles,
+        'anio_actual': anio_actual,
+        'tendencia_mensual': tendencia_mensual,
         # Tabla
         'page_obj': page_obj,
     })
+
+
+@login_required
+def reporte_anual_pdf(request):
+    try:
+        anio = int(request.GET.get('anio', date.today().year))
+    except (TypeError, ValueError):
+        anio = date.today().year
+
+    pdf_bytes = generar_reporte_anual_pdf(request.user, anio)
+
+    respuesta = HttpResponse(pdf_bytes, content_type='application/pdf')
+    respuesta['Content-Disposition'] = f'attachment; filename="tributia-{anio}.pdf"'
+    return respuesta
 
 @login_required
 def calendario(request):
@@ -704,7 +725,7 @@ def calendario(request):
 
     # Agrupar por día
     eventos_por_dia = {}
-    for ev in _fechas_fiscales_mes(year, month):
+    for ev in fechas_fiscales_mes(year, month):
         eventos_por_dia.setdefault(ev['day'], []).append(ev)
     for ev in eventos_usuario:
         eventos_por_dia.setdefault(ev.fecha.day, []).append({
@@ -981,6 +1002,11 @@ def asistente_ia(request):
         )
     )
 
+    try:
+        perfil = PerfilTributario.objects.get(usuario=request.user)
+    except PerfilTributario.DoesNotExist:
+        perfil = None
+
     return render(
         request,
         "asistente_ia.html",
@@ -988,6 +1014,7 @@ def asistente_ia(request):
             "conversacion": conversacion,
             "conversaciones": conversaciones,
             "mensajes": mensajes,
+            "perfil": perfil,
         }
     )
 

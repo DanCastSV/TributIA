@@ -96,6 +96,12 @@ path(
     views.centro_analisis,
     name='centro_analisis'
 ),
+
+path(
+    'centro-analisis/reporte/',
+    views.reporte_anual_pdf,
+    name='reporte_anual_pdf'
+),
 path(
     'calendario/',
     views.calendario,

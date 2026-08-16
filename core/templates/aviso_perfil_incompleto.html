@@ -1,0 +1,31 @@
+{% load icons %}
+{% if perfil and not perfil.datos_clave_completos %}
+<div class="db-consejo db-consejo--alerta aviso-perfil-incompleto" id="avisoPerfilIncompleto">
+    <div class="db-consejo__icon">{% icon "triangle-alert" size=22 %}</div>
+    <div class="db-consejo__body">
+        <strong class="db-consejo__titulo">Completa tu perfil tributario</strong>
+        <p class="db-consejo__mensaje">{{ mensaje }}</p>
+    </div>
+    <a href="{% url 'editar_perfil' %}" class="db-consejo__btn">Completar ahora →</a>
+    <button type="button" class="db-consejo__close" id="cerrarAvisoPerfilIncompleto" aria-label="Cerrar aviso">
+        {% icon "x" size=16 %}
+    </button>
+</div>
+<script>
+    (function () {
+        var CLAVE = 'tributia_aviso_perfil_cerrado';
+        var aviso = document.getElementById('avisoPerfilIncompleto');
+        if (!aviso) return;
+
+        if (sessionStorage.getItem(CLAVE) === '1') {
+            aviso.style.display = 'none';
+            return;
+        }
+
+        document.getElementById('cerrarAvisoPerfilIncompleto').addEventListener('click', function () {
+            aviso.style.display = 'none';
+            sessionStorage.setItem(CLAVE, '1');
+        });
+    })();
+</script>
+{% endif %}

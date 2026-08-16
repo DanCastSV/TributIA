@@ -45,6 +45,10 @@ class PerfilTributario(models.Model):
         auto_now_add=True
     )
 
+    @property
+    def datos_clave_completos(self):
+        return bool(self.salario_mensual) and bool(self.actividad_economica)
+
 
 class DocumentoTributario(models.Model):
 
