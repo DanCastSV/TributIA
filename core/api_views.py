@@ -12,6 +12,7 @@ from django.db import connection
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 
+from core.analysis_capacity import CapacidadAnalisisAgotada, reservar_capacidad_analisis
 from core.models import AnalisisDocumento, DocumentoTributario
 from core.ocr_utils import _tesseract_cmd, validar_archivo
 from core.rate_limit import limitar_solicitudes
@@ -128,30 +129,40 @@ def analizar_documento_api(request):
 
     nombre = request.POST.get("nombre") or archivo.name
 
-    doc = DocumentoTributario.objects.create(
-        usuario=request.user,
-        nombre=nombre,
-        archivo=archivo,
-    )
-
     try:
-        analizar_documento(doc)
-    except DocumentoNoTributarioError as e:
-        return JsonResponse({
-            "error": "documento_no_tributario",
-            "detalle": str(e),
-        }, status=422)
-    except Exception as e:
-        logger.exception("analisis_fallido_inesperado", extra={
-            "documento_id": doc.id,
-            "tipo_error": type(e).__name__,
-        })
-        doc.estado = "error"
-        doc.save()
-        return JsonResponse({
-            "error": "error_interno",
-            "detalle": "Ocurrió un error al procesar el documento. Inténtalo de nuevo.",
-        }, status=500)
+        with reservar_capacidad_analisis():
+            doc = DocumentoTributario.objects.create(
+                usuario=request.user,
+                nombre=nombre,
+                archivo=archivo,
+            )
+
+            try:
+                analizar_documento(doc)
+            except DocumentoNoTributarioError as e:
+                return JsonResponse({
+                    "error": "documento_no_tributario",
+                    "detalle": str(e),
+                }, status=422)
+            except Exception as e:
+                logger.exception("analisis_fallido_inesperado", extra={
+                    "documento_id": doc.id,
+                    "tipo_error": type(e).__name__,
+                })
+                doc.estado = "error"
+                doc.save()
+                return JsonResponse({
+                    "error": "error_interno",
+                    "detalle": "Ocurrió un error al procesar el documento. Inténtalo de nuevo.",
+                }, status=500)
+    except CapacidadAnalisisAgotada:
+        logger.warning("solicitud_rechazada", extra={"tipo_error": "capacidad_agotada"})
+        respuesta = JsonResponse({
+            "error": "capacidad_temporal_agotada",
+            "detalle": "Hay varios documentos en proceso. Inténtalo nuevamente en unos segundos.",
+        }, status=429)
+        respuesta["Retry-After"] = "15"
+        return respuesta
 
     analisis = AnalisisDocumento.objects.get(documento=doc)
 

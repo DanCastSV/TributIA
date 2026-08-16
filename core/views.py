@@ -12,6 +12,7 @@ from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
+from core.analysis_capacity import CapacidadAnalisisAgotada, reservar_capacidad_analisis
 from core.datos_el_salvador import DATOS_EL_SALVADOR
 from core.rate_limit import limitar_solicitudes
 from core.services.analizador import DocumentoNoTributarioError, analizar_documento
@@ -449,26 +450,34 @@ def documentos(request):
 
         if form.is_valid():
 
-            doc = form.save(commit=False)
-            doc.usuario = request.user
-            doc.save()
-
             try:
-                analizar_documento(doc)
-                messages.success(request, f'"{doc.nombre}" fue analizado correctamente.')
-            except DocumentoNoTributarioError as e:
+                with reservar_capacidad_analisis():
+                    doc = form.save(commit=False)
+                    doc.usuario = request.user
+                    doc.save()
+
+                    try:
+                        analizar_documento(doc)
+                        messages.success(request, f'"{doc.nombre}" fue analizado correctamente.')
+                    except DocumentoNoTributarioError as e:
+                        messages.warning(
+                            request,
+                            f'El documento "{doc.nombre}" fue rechazado: {e} No se guardó en el sistema.'
+                        )
+                    except Exception as e:
+                        logger.error(
+                            'analisis_web_fallido',
+                            extra={'documento_id': doc.id, 'tipo_error': type(e).__name__},
+                        )
+                        doc.estado = 'error'
+                        doc.save()
+                        messages.error(request, f'Ocurrió un error al analizar "{doc.nombre}". Inténtalo de nuevo.')
+            except CapacidadAnalisisAgotada:
+                logger.warning('analisis_web_rechazado', extra={'tipo_error': 'capacidad_agotada'})
                 messages.warning(
                     request,
-                    f'El documento "{doc.nombre}" fue rechazado: {e} No se guardó en el sistema.'
+                    'Hay varios documentos en proceso. Inténtalo nuevamente en unos segundos.'
                 )
-            except Exception as e:
-                logger.error(
-                    'analisis_web_fallido',
-                    extra={'documento_id': doc.id, 'tipo_error': type(e).__name__},
-                )
-                doc.estado = 'error'
-                doc.save()
-                messages.error(request, f'Ocurrió un error al analizar "{doc.nombre}". Inténtalo de nuevo.')
 
             return redirect('documentos')
 
