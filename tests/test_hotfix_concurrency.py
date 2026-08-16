@@ -5,11 +5,31 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 
-from core.analysis_capacity import CapacidadAnalisisAgotada, reservar_capacidad_analisis
+from core.analysis_capacity import (
+    CapacidadAnalisisAgotada,
+    _SEMAFOROS_LOCALES,
+    reservar_capacidad_analisis,
+)
 from core.models import DocumentoTributario
 
 
 class CapacidadAnalisisTests(SimpleTestCase):
+    def tearDown(self):
+        _SEMAFOROS_LOCALES.clear()
+
+    @override_settings(TRIBUTIA_MAX_ANALISIS_CONCURRENTES=1)
+    @patch('core.analysis_capacity.connection')
+    def test_fallback_local_rechaza_segunda_reserva_y_libera_al_salir(self, conexion):
+        conexion.vendor = 'sqlite'
+
+        with reservar_capacidad_analisis():
+            with self.assertRaises(CapacidadAnalisisAgotada):
+                with reservar_capacidad_analisis():
+                    self.fail('No debe entrar sin capacidad')
+
+        with reservar_capacidad_analisis():
+            pass
+
     @override_settings(TRIBUTIA_MAX_ANALISIS_CONCURRENTES=2)
     @patch('core.analysis_capacity.connection')
     def test_rechaza_inmediatamente_si_todos_los_slots_estan_ocupados(self, conexion):

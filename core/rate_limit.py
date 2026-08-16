@@ -1,18 +1,51 @@
 import hashlib
+import ipaddress
 import time
 from functools import wraps
 
-from django.core.cache import cache
+from django.conf import settings
+from django.db import connection
 from django.http import HttpResponse, JsonResponse
 
 
+_PROXY_CIDRS_POR_DEFECTO = ('127.0.0.0/8', '::1/128')
+
+
+def _ip_valida(valor):
+    try:
+        return str(ipaddress.ip_address(valor.strip()))
+    except (AttributeError, ValueError):
+        return None
+
+
+def _proxy_confiable(ip_remota):
+    ip = _ip_valida(ip_remota)
+    if ip is None:
+        return False
+
+    redes = getattr(settings, 'TRIBUTIA_TRUSTED_PROXY_CIDRS', _PROXY_CIDRS_POR_DEFECTO)
+    try:
+        direccion = ipaddress.ip_address(ip)
+        return any(direccion in ipaddress.ip_network(red, strict=False) for red in redes)
+    except ValueError:
+        return False
+
+
 def _ip_cliente(request):
-    # La aplicación solo escucha detrás del proxy declarado; Caddy reemplaza
-    # X-Forwarded-For. Se conserva REMOTE_ADDR como fallback local.
-    reenviada = request.META.get('HTTP_X_FORWARDED_FOR', '')
-    if reenviada:
-        return reenviada.split(',', 1)[0].strip()
-    return request.META.get('REMOTE_ADDR', 'desconocida')
+    """Acepta XFF únicamente desde un proxy directo explícitamente confiable."""
+    remota = _ip_valida(request.META.get('REMOTE_ADDR', ''))
+    if remota is None:
+        return 'desconocida'
+
+    reenviadas = request.META.get('HTTP_X_FORWARDED_FOR', '')
+    if reenviadas and _proxy_confiable(remota):
+        # El proxy confiable agrega la dirección observada al final de la cadena.
+        # Tomar la última evita que el cliente elija el primer XFF arbitrariamente.
+        for candidata in reversed(reenviadas.split(',')):
+            normalizada = _ip_valida(candidata)
+            if normalizada is not None:
+                return normalizada
+    return remota
 
 
 def _identificador(request, clave):
@@ -23,13 +56,28 @@ def _identificador(request, clave):
     return hashlib.sha256(valor.encode('utf-8')).hexdigest()
 
 
-def limitar_solicitudes(*, ambito, limite, ventana_segundos, clave='ip', json=False, metodos=('POST',)):
-    """Límite ligero para la demo, sin Redis ni servicios adicionales.
+def _incrementar_contador(ambito, identificador, cubeta):
+    """Incrementa atómicamente una cubeta compartida en PostgreSQL/SQLite."""
+    llave = hashlib.sha256(f'{ambito}:{identificador}'.encode('utf-8')).hexdigest()
+    consulta = '''
+        INSERT INTO core_ratelimitbucket (identificador, cubeta, contador)
+        VALUES (%s, %s, 1)
+        ON CONFLICT (identificador) DO UPDATE SET
+            contador = CASE
+                WHEN core_ratelimitbucket.cubeta = excluded.cubeta
+                THEN core_ratelimitbucket.contador + 1
+                ELSE 1
+            END,
+            cubeta = excluded.cubeta
+        RETURNING contador
+    '''
+    with connection.cursor() as cursor:
+        cursor.execute(consulta, [llave, cubeta])
+        return int(cursor.fetchone()[0])
 
-    Django LocMemCache mantiene un contador por worker. En producción hay tres
-    workers, así que este control es deliberadamente conservador y se combina
-    con Cloudflare/Caddy; evita ráfagas accidentales sin añadir infraestructura.
-    """
+
+def limitar_solicitudes(*, ambito, limite, ventana_segundos, clave='ip', json=False, metodos=('POST',)):
+    """Límite compartido por DB, sin Redis ni contadores por worker."""
     def decorador(vista):
         @wraps(vista)
         def envuelta(request, *args, **kwargs):
@@ -39,16 +87,7 @@ def limitar_solicitudes(*, ambito, limite, ventana_segundos, clave='ip', json=Fa
             ahora = int(time.time())
             cubeta = ahora // ventana_segundos
             identificador = _identificador(request, clave)
-            llave = f'tributia:rate:{ambito}:{identificador}:{cubeta}'
-
-            if cache.add(llave, 1, timeout=ventana_segundos + 5):
-                contador = 1
-            else:
-                try:
-                    contador = cache.incr(llave)
-                except ValueError:
-                    cache.set(llave, 1, timeout=ventana_segundos + 5)
-                    contador = 1
+            contador = _incrementar_contador(ambito, identificador, cubeta)
 
             if contador <= limite:
                 return vista(request, *args, **kwargs)

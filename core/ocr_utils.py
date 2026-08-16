@@ -31,6 +31,23 @@ else:
 # bastante más que esto; por debajo de este umbral se asume que es un
 # escaneo/imagen sin texto real y se cae al OCR.
 MIN_CARACTERES_TEXTO_DIGITAL = 40
+PDF_DPI_OCR = 300
+PDF_MAX_LADO_PUNTOS = 2000
+PDF_MAX_PIXELES_POR_PAGINA = 25_000_000
+
+
+def _geometria_pdf_valida(documento, dpi=PDF_DPI_OCR):
+    escala = dpi / 72
+    for pagina in documento:
+        ancho = float(pagina.rect.width)
+        alto = float(pagina.rect.height)
+        if ancho <= 0 or alto <= 0:
+            return False
+        if ancho > PDF_MAX_LADO_PUNTOS or alto > PDF_MAX_LADO_PUNTOS:
+            return False
+        if (ancho * escala) * (alto * escala) > PDF_MAX_PIXELES_POR_PAGINA:
+            return False
+    return True
 
 
 def _localizar_binario(nombre_exe, rutas_conocidas_glob):
@@ -73,7 +90,7 @@ if _pdftoppm_cmd:
     _poppler_bin = os.path.dirname(_pdftoppm_cmd)
 
 
-def extraer_texto_pdf(ruta_pdf, dpi=300):
+def extraer_texto_pdf(ruta_pdf, dpi=PDF_DPI_OCR):
     """
     Extrae texto de un PDF usando OCR con Tesseract
 
@@ -87,7 +104,11 @@ def extraer_texto_pdf(ruta_pdf, dpi=300):
     try:
         logger.info("procesando_pdf")
         total_paginas = int(
-            pdfinfo_from_path(ruta_pdf, poppler_path=_poppler_bin).get('Pages', 0)
+            pdfinfo_from_path(
+                ruta_pdf,
+                poppler_path=_poppler_bin,
+                timeout=10,
+            ).get('Pages', 0)
         )
         if not 1 <= total_paginas <= 20:
             raise ValueError("Cantidad de páginas no permitida")
@@ -104,6 +125,7 @@ def extraer_texto_pdf(ruta_pdf, dpi=300):
                 first_page=numero_pagina,
                 last_page=numero_pagina,
                 thread_count=1,
+                timeout=30,
             )
             if not imagenes:
                 raise ValueError("No fue posible renderizar una página del PDF")
@@ -113,6 +135,7 @@ def extraer_texto_pdf(ruta_pdf, dpi=300):
                     imagen,
                     lang='spa',
                     config=TESSERACT_CONFIG,
+                    timeout=30,
                 )
                 texto_completo += texto + "\n---PÁGINA {} FIN---\n".format(numero_pagina)
             finally:
@@ -275,6 +298,8 @@ def validar_archivo(archivo):
                     return False, "El PDF no contiene páginas"
                 if documento.page_count > 20:
                     return False, "El PDF supera el máximo de 20 páginas"
+                if not _geometria_pdf_valida(documento):
+                    return False, "Las dimensiones de una página PDF no son compatibles"
             except Exception:
                 return False, "El contenido no corresponde a un PDF válido"
             finally:

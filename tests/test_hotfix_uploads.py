@@ -10,10 +10,10 @@ from core.forms import DocumentoForm
 from core.ocr_utils import extraer_texto_pdf, validar_archivo
 
 
-def _pdf_valido(paginas=1):
+def _pdf_valido(paginas=1, ancho=595, alto=842):
     documento = fitz.open()
     for _ in range(paginas):
-        documento.new_page(width=595, height=842)
+        documento.new_page(width=ancho, height=alto)
     contenido = documento.tobytes()
     documento.close()
     return contenido
@@ -57,6 +57,16 @@ class ValidacionUploadHotfixTests(SimpleTestCase):
         valido, mensaje = validar_archivo(archivo)
         self.assertFalse(valido)
         self.assertIn('páginas', mensaje.lower())
+
+    def test_rechaza_pdf_con_geometria_extrema_antes_de_ocr(self):
+        archivo = SimpleUploadedFile(
+            'gigante.pdf',
+            _pdf_valido(ancho=100_000, alto=100_000),
+            content_type='application/pdf',
+        )
+        valido, mensaje = validar_archivo(archivo)
+        self.assertFalse(valido)
+        self.assertIn('dimensiones', mensaje.lower())
 
     def test_acepta_png_real(self):
         archivo = SimpleUploadedFile(

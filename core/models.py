@@ -388,3 +388,11 @@ class MensajeConversacion(models.Model):
         
     def __str__(self):
         return f"{self.rol}: {self.contenido[:50]}..."
+
+
+class RateLimitBucket(models.Model):
+    """Contador compartido y atómico para límites de solicitudes."""
+
+    identificador = models.CharField(max_length=64, primary_key=True)
+    cubeta = models.PositiveBigIntegerField()
+    contador = models.PositiveIntegerField(default=0)

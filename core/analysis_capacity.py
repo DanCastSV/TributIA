@@ -1,8 +1,6 @@
-import fcntl
 import logging
-import os
+import threading
 from contextlib import contextmanager
-from pathlib import Path
 
 from django.conf import settings
 from django.db import connection
@@ -10,8 +8,9 @@ from django.db import connection
 logger = logging.getLogger(__name__)
 
 _LOCK_BASE = int('5452494255544900', 16)
-_LOCK_DIR = Path('/tmp/tributia-analysis-capacity')
 _MAXIMO_PERMITIDO = 8
+_SEMAFOROS_LOCALES = {}
+_SEMAFOROS_LOCALES_LOCK = threading.Lock()
 
 
 class CapacidadAnalisisAgotada(Exception):
@@ -47,28 +46,22 @@ def _reservar_postgresql(limite):
             logger.warning('slot_analisis_no_liberado')
 
 
+def _semaforo_local(limite):
+    with _SEMAFOROS_LOCALES_LOCK:
+        return _SEMAFOROS_LOCALES.setdefault(limite, threading.BoundedSemaphore(limite))
+
+
 @contextmanager
-def _reservar_archivo(limite):
-    """Fallback local para desarrollo SQLite; producción usa PostgreSQL."""
-    _LOCK_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-    descriptor = None
+def _reservar_local(limite):
+    """Fallback por proceso para desarrollo SQLite; producción usa PostgreSQL."""
+    semaforo = _semaforo_local(limite)
+    adquirido = semaforo.acquire(blocking=False)
+    if not adquirido:
+        raise CapacidadAnalisisAgotada
     try:
-        for indice in range(limite):
-            ruta = _LOCK_DIR / f'slot-{indice}.lock'
-            candidato = os.open(ruta, os.O_CREAT | os.O_RDWR, 0o600)
-            try:
-                fcntl.flock(candidato, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                descriptor = candidato
-                break
-            except BlockingIOError:
-                os.close(candidato)
-        if descriptor is None:
-            raise CapacidadAnalisisAgotada
         yield
     finally:
-        if descriptor is not None:
-            fcntl.flock(descriptor, fcntl.LOCK_UN)
-            os.close(descriptor)
+        semaforo.release()
 
 
 @contextmanager
@@ -84,5 +77,5 @@ def reservar_capacidad_analisis():
         with _reservar_postgresql(limite):
             yield
     else:
-        with _reservar_archivo(limite):
+        with _reservar_local(limite):
             yield
