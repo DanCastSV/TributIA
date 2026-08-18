@@ -5,6 +5,7 @@ from google.genai import types
 from core.datos_el_salvador import DATOS_EL_SALVADOR
 from core.ia.gemini_client import MODEL_NAME, cliente
 from core.models import AnalisisDocumento, MensajeConversacion, PerfilTributario
+from core.uso_gemini import registrar_uso_gemini
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,8 @@ def responder_con_gemini(conversacion, pregunta):
                 max_output_tokens=1024,
             ),
         )
+
+        registrar_uso_gemini(usuario, 'asistente_chat', respuesta)
 
         if not respuesta.text:
             raise ValueError("Gemini devolvió una respuesta vacía")

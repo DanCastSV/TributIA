@@ -17,6 +17,7 @@ from django.contrib.auth.models import User
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 
+from core.ia.gemini_client import MODEL_NAME
 from core.models import AnalisisDocumento, DocumentoTributario, EventoCalendario
 from core.services.analizador import (
     DocumentoNoTributarioError,
@@ -103,6 +104,7 @@ class AnalizarDocumentoIntegracionTests(TestCase):
         self.assertEqual(analisis.nombre_empresa, "Ferretería ACME")
         self.assertEqual(analisis.total, 113.0)
         self.assertGreater(analisis.confianza_clasificacion, 0)
+        self.assertEqual(analisis.modelo_ia, MODEL_NAME)
 
         # Al detectar una fecha, debe crearse un evento en el calendario fiscal.
         self.assertTrue(

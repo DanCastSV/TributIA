@@ -292,6 +292,37 @@ class AnalisisDocumento(models.Model):
     )
 
     # ==========================
+    # FEEDBACK DEL USUARIO
+    # ==========================
+
+    FEEDBACK_CHOICES = [
+        ('correcto', 'Correcto'),
+        ('incorrecto', 'Incorrecto'),
+    ]
+
+    feedback_usuario = models.CharField(
+        max_length=10,
+        choices=FEEDBACK_CHOICES,
+        blank=True,
+        null=True,
+    )
+
+    feedback_comentario = models.TextField(
+        blank=True,
+        null=True,
+    )
+
+    # ==========================
+    # TRAZABILIDAD
+    # ==========================
+
+    modelo_ia = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+    )
+
+    # ==========================
     # FECHAS
     # ==========================
 
@@ -400,3 +431,33 @@ class RateLimitBucket(models.Model):
     identificador = models.CharField(max_length=64, primary_key=True)
     cubeta = models.PositiveBigIntegerField()
     contador = models.PositiveIntegerField(default=0)
+
+
+class UsoGemini(models.Model):
+    """Registro de tokens consumidos por cada llamada a Gemini, para
+    poder ver cuánta cuota gasta cada usuario (Google no lo desglosa)."""
+
+    TIPOS = [
+        ('analisis_documento', 'Análisis de documento'),
+        ('asistente_chat', 'Asistente IA'),
+    ]
+
+    usuario = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='uso_gemini',
+    )
+
+    tipo = models.CharField(max_length=30, choices=TIPOS)
+
+    tokens_entrada = models.PositiveIntegerField(default=0)
+    tokens_salida = models.PositiveIntegerField(default=0)
+    tokens_total = models.PositiveIntegerField(default=0)
+
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-creado_en']
+
+    def __str__(self):
+        return f"{self.usuario.username} · {self.tipo} · {self.tokens_total} tokens"

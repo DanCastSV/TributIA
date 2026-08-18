@@ -217,3 +217,13 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 GEMINI_API_KEY = os.environ['GEMINI_API_KEY']
+
+# Límites de Gemini según aistudio.google.com/rate-limit (Google no los
+# documenta como constante pública — dependen del modelo y del tier del
+# proyecto, así que hay que confirmarlos ahí después de cualquier cambio
+# de modelo o de tier). Los valores por defecto de abajo son los del
+# tier gratuito para gemini-2.5-flash-lite; al pasar a billing + Flash
+# hay que actualizar estos 3 en el .env con los números reales de Tier 1.
+TRIBUTIA_GEMINI_RPD_LIMITE = int(os.environ.get('TRIBUTIA_GEMINI_RPD_LIMITE', 20))
+TRIBUTIA_GEMINI_RPM_LIMITE = int(os.environ.get('TRIBUTIA_GEMINI_RPM_LIMITE', 10))
+TRIBUTIA_GEMINI_TPM_LIMITE = int(os.environ.get('TRIBUTIA_GEMINI_TPM_LIMITE', 250_000))

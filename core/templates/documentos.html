@@ -27,47 +27,84 @@ Documentos
 
     <div class="profile-card">
 
-        <h1>{% icon "file-text" size=24 %} Mis Documentos</h1>
+        <h1>{% icon "file-text" size=24 %} Subir Documentos</h1>
 
-        <form method="POST"
-              enctype="multipart/form-data"
-              id="upload-form">
-
-            {% csrf_token %}
-
-            <div class="form-group">
-                <label for="id_nombre">Nombre del documento</label>
-                {{ form.nombre }}
-            </div>
-
-            <label for="id_archivo" class="upload-trigger" id="upload-trigger">
-                {% icon "cloud-upload" size=32 %}
-                <span>Haz clic para seleccionar un archivo</span>
-                <small>PDF, JPG o PNG &middot; máximo 20MB</small>
-            </label>
-            {{ form.archivo }}
-
-            <div class="file-preview-card" id="file-preview" hidden>
-                <span class="file-preview-icon">{% icon "file-text" size=28 %}</span>
-                <div class="file-preview-meta">
-                    <strong id="file-preview-name"></strong>
-                    <small id="file-preview-size"></small>
-                </div>
-                <button type="button" class="file-preview-remove" id="file-preview-remove" aria-label="Quitar archivo">
-                    {% icon "x" size=18 %}
-                </button>
-            </div>
-
-            <button
-                type="submit"
-                class="btn-primary btn-full"
-                id="upload-submit">
-
-                {% icon "cloud-upload" size=16 %} Subir Documento
-
+        <div class="upload-modo-toggle" role="tablist" aria-label="Cantidad de documentos a subir">
+            <button type="button" class="upload-modo-btn is-active" id="upload-modo-btn-uno"
+                    data-modo="uno" role="tab" aria-selected="true">
+                {% icon "file-text" size=15 %} Un documento
             </button>
+            <button type="button" class="upload-modo-btn" id="upload-modo-btn-varios"
+                    data-modo="varios" role="tab" aria-selected="false">
+                {% icon "cloud-upload" size=15 %} Varios documentos
+            </button>
+        </div>
 
-        </form>
+        <div id="upload-modo-uno">
+            <form method="POST"
+                  enctype="multipart/form-data"
+                  id="upload-form">
+
+                {% csrf_token %}
+
+                <div class="form-group">
+                    <label for="id_nombre">Nombre del documento</label>
+                    {{ form.nombre }}
+                </div>
+
+                <label for="id_archivo" class="upload-trigger" id="upload-trigger">
+                    {% icon "cloud-upload" size=32 %}
+                    <span>Haz clic para seleccionar un archivo</span>
+                    <small>PDF, JPG o PNG &middot; máximo 20MB</small>
+                </label>
+                {{ form.archivo }}
+
+                <div class="file-preview-card" id="file-preview" hidden>
+                    <span class="file-preview-icon">{% icon "file-text" size=28 %}</span>
+                    <div class="file-preview-meta">
+                        <strong id="file-preview-name"></strong>
+                        <small id="file-preview-size"></small>
+                    </div>
+                    <button type="button" class="file-preview-remove" id="file-preview-remove" aria-label="Quitar archivo">
+                        {% icon "x" size=18 %}
+                    </button>
+                </div>
+
+                <button
+                    type="submit"
+                    class="btn-primary btn-full"
+                    id="upload-submit">
+
+                    {% icon "cloud-upload" size=16 %} Subir Documento
+
+                </button>
+
+            </form>
+        </div>
+
+        <div id="upload-modo-varios" hidden>
+            <p class="ca-subtexto">Subí hasta 10 archivos a la vez; cada uno se analiza igual que en la carga individual.</p>
+
+            <form method="POST"
+                  action="{% url 'subir_documentos_lote' %}"
+                  enctype="multipart/form-data"
+                  id="upload-lote-form">
+
+                {% csrf_token %}
+
+                <label for="id_archivos" class="upload-trigger" id="upload-lote-trigger">
+                    {% icon "cloud-upload" size=32 %}
+                    <span id="upload-lote-texto">Haz clic para seleccionar varios archivos</span>
+                    <small>PDF, JPG o PNG &middot; máximo 20MB cada uno &middot; hasta 10 archivos</small>
+                </label>
+                <input type="file" id="id_archivos" name="archivos" multiple
+                       accept=".pdf,.jpg,.jpeg,.png" class="visually-hidden-file-input">
+
+                <button type="submit" class="btn-primary btn-full" id="upload-lote-submit">
+                    {% icon "cloud-upload" size=16 %} Subir y analizar todos
+                </button>
+            </form>
+        </div>
 
     </div>
 
@@ -155,4 +192,47 @@ Documentos
 
 {% block extra_js %}
 <script src="{% static 'js/documentos.js' %}" defer></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var btnUno = document.getElementById('upload-modo-btn-uno');
+    var btnVarios = document.getElementById('upload-modo-btn-varios');
+    var panelUno = document.getElementById('upload-modo-uno');
+    var panelVarios = document.getElementById('upload-modo-varios');
+
+    function mostrarModo(modo) {
+        var esUno = modo === 'uno';
+        panelUno.hidden = !esUno;
+        panelVarios.hidden = esUno;
+        btnUno.classList.toggle('is-active', esUno);
+        btnVarios.classList.toggle('is-active', !esUno);
+        btnUno.setAttribute('aria-selected', esUno);
+        btnVarios.setAttribute('aria-selected', !esUno);
+    }
+
+    if (btnUno && btnVarios) {
+        btnUno.addEventListener('click', function () { mostrarModo('uno'); });
+        btnVarios.addEventListener('click', function () { mostrarModo('varios'); });
+    }
+
+    var inputLote = document.getElementById('id_archivos');
+    var textoLote = document.getElementById('upload-lote-texto');
+    var formLote = document.getElementById('upload-lote-form');
+    var overlay = document.getElementById('loading-overlay');
+    var submitLote = document.getElementById('upload-lote-submit');
+
+    if (!inputLote || !formLote) return;
+
+    inputLote.addEventListener('change', function () {
+        var n = inputLote.files.length;
+        textoLote.textContent = n > 0
+            ? n + ' archivo' + (n !== 1 ? 's' : '') + ' seleccionado' + (n !== 1 ? 's' : '')
+            : 'Haz clic para seleccionar varios archivos';
+    });
+
+    formLote.addEventListener('submit', function () {
+        if (overlay) overlay.classList.add('active');
+        if (submitLote) submitLote.disabled = true;
+    });
+});
+</script>
 {% endblock %}

@@ -51,11 +51,11 @@
 | Elemento | Descripción |
 |---|---|
 | Tipo de IA utilizada | OCR, procesamiento de lenguaje natural (NLP) y modelo generativo (LLM) |
-| Modelo, algoritmo o técnica | Tesseract OCR (extracción de texto en escaneados) + PyMuPDF (texto embebido en PDF) + spaCy `es_core_news_sm` (reconocimiento de entidades) + Google Gemini `gemini-2.5-flash-lite` (clasificación, corrección de entidades, resumen y recomendación) |
+| Modelo, algoritmo o técnica | Tesseract OCR (extracción de texto en escaneados) + PyMuPDF (texto embebido en PDF) + spaCy `es_core_news_sm` (reconocimiento de entidades) + Google Gemini `gemini-2.5-flash` (clasificación, corrección de entidades, resumen y recomendación) |
 | Datos de entrada | Archivo del documento tributario (PDF/PNG/JPG) subido por el usuario, más contexto del perfil tributario en el caso del asistente conversacional |
 | Resultado generado por la IA | JSON estructurado: tipo de documento, si es tributario y si es deducible, entidades (empresa, cliente, fecha), montos (subtotal, IVA, total), resumen y recomendación en lenguaje natural |
-| Métrica o forma de evaluación | `confianza_clasificacion` (0.0–1.0), calculada según cuántos de los 9 campos clave logró extraer Gemini exitosamente |
-| Limitaciones actuales | Solo se puede usar `gemini-2.5-flash-lite` sin costo adicional (billing limitado); la precisión depende de la calidad del OCR en documentos escaneados; pipeline síncrono sin reintentos automáticos ante fallos de la API |
+| Métrica o forma de evaluación | `confianza_clasificacion` (0.0–1.0), calculada según cuántos de los 9 campos clave logró extraer Gemini exitosamente; más un feedback explícito del usuario (👍/👎 "¿este análisis fue correcto?") guardado por documento, como señal de calidad real aunque todavía no se usa para reentrenar ni ajustar el prompt automáticamente |
+| Limitaciones actuales | La precisión depende de la calidad del OCR en documentos escaneados (Gemini solo ve el texto ya extraído, no la imagen); pipeline síncrono sin cola de tareas ante fallos de la API |
 
 **Explicación breve:**
 
@@ -77,10 +77,17 @@
 - Asistente IA multi-turno con contexto del perfil y documentos del usuario.
 - Aviso no bloqueante en Asistente IA y Documentos cuando el perfil no tiene salario/actividad económica registrados, para que esas dos funciones puedan personalizar sus respuestas.
 - Perfil tributario con barra de progreso de completitud y cálculo real de confianza de clasificación.
+- Feedback del usuario sobre cada análisis (👍 correcto / 👎 incorrecto, con comentario opcional) en el detalle de documento — primer paso hacia medir calidad del modelo en producción.
+- Carga múltiple de documentos (hasta 10 a la vez) en Documentos, con un selector "Un documento / Varios documentos" para no mostrar los dos formularios a la vez.
+- Exportar el historial de análisis a CSV (24 columnas: identificadores, montos, clasificación, confianza y modelo de IA usado) además del PDF anual, ambos desde Centro de Análisis.
+- Checklist de documentos por formulario en Recursos Fiscales: cada formulario (F-07, F-11, F-930, etc.) muestra cuántos de sus documentos requeridos ya tenés, cruzando por palabras clave contra tus documentos ya analizados.
+- Reporte anual en PDF ampliado: además del resumen, incluye desglose por tipo de documento, tendencia mensual, y una sección de metodología/trazabilidad (modelo de IA usado, confianza promedio y su distribución).
+- Panel `/uso-gemini/` (solo staff) con tokens consumidos por usuario y por período, y barras de progreso contra los límites reales de RPD/RPM/TPM del proyecto de Gemini (configurables por variable de entorno), con aviso visual si se acerca al límite.
+- Página "Cómo Funciona" en el sidebar: guía de onboarding paso a paso para usuarios nuevos, enlazando a cada sección de la app.
 - Interfaz responsive: el sidebar del dashboard se convierte en un menú de panel deslizante (hamburguesa) por debajo de 768px, en vez de comprimirse en una barra de iconos.
 - API interna versionada (`/api/v1/`) con endpoints `/health/`, `/metadata/` y `/analizar-documento/`, documentada en `docs/api.md` (Semana 2).
 - Rate limiting compartido por base de datos (registro, subida de documentos, chat, API) y límite de análisis OCR/Gemini concurrentes, para no saturar Gunicorn ni la cuota de Gemini bajo carga (ver `docs/seguridad-2026-08-15.md`).
-- Suite de pruebas automatizadas (61 tests: unitarias de extracción regex/parsing de Gemini/cálculo de confianza, integración del pipeline completo, seguridad, rate limiting, concurrencia, generación de PDF y recordatorios por email) con CI en GitHub Actions (Semana 3, ampliada después).
+- Suite de pruebas automatizadas (90 tests: unitarias de extracción regex/parsing de Gemini/cálculo de confianza, integración del pipeline completo, seguridad, rate limiting, concurrencia, generación de PDF/CSV, recordatorios por email, feedback, carga múltiple, checklist de formularios y uso de Gemini) con CI en GitHub Actions (Semana 3, ampliada después).
 - Contenedor Docker (`Dockerfile` + `docker-compose.yml`, servicios `web` + `db`/PostgreSQL) con gunicorn + whitenoise, `DEBUG`/`ALLOWED_HOSTS`/`POSTGRES_*` configurables por entorno, probado de punta a punta (build, migraciones contra Postgres, `/health`, endpoint principal con pipeline de IA real) (Semana 4). Ver `docs/despliegue-semana4.md`.
 - Migración de SQLite a PostgreSQL dentro del contenedor (`settings.py` usa Postgres si detecta `POSTGRES_HOST`, y SQLite en desarrollo local sin Docker).
 - Logs estructurados en JSON correlacionados por `request_id` (Semana 5), ver `docs/observabilidad-semana5.md`.
@@ -90,7 +97,8 @@
 - Ejecución asíncrona del pipeline de análisis (cola de tareas Celery/RQ) — sigue siendo síncrono/bloqueante dentro del contenedor (Semana 4-5).
 - Apuntar el contenedor a un PostgreSQL *administrado* (no el servicio `db` local) para un despliegue real.
 - Scheduler real para los recordatorios por email — hoy es un comando manual (`enviar_recordatorios_fiscales`); agendarlo automáticamente (cron/Task Scheduler/Celery beat) queda pendiente.
-- Healthcheck ampliado y métrica de consumo de cuota de Gemini.
+- Healthcheck ampliado (el de `/uso-gemini/` es un panel manual de staff, no una alerta automática si la cuota se agota).
+- El feedback 👍/👎 del usuario se guarda pero todavía no se usa para nada automatizado (ni dashboard de tasa de acierto, ni ajuste de prompt) — es insumo crudo para una futura evaluación offline del modelo.
 
 ### Evidencias actuales
 
@@ -154,12 +162,14 @@ tributia_project/
     forms.py
     datos_el_salvador.py
     fechas_fiscales.py
+    formularios_fiscales.py
     ocr_utils.py
     rate_limit.py
     analysis_capacity.py
     middleware.py
     logging_context.py
     logging_utils.py
+    uso_gemini.py
     migrations/
     management/
       commands/
@@ -208,7 +218,7 @@ tributia_project/
 
 **Notas sobre la estructura:**
 
-> `core/` concentra la app principal de Django: modelos, vistas, formularios, datos de referencia fiscal, y tres subcarpetas clave — `services/` con la orquestación del análisis, el asistente y el reporte anual en PDF; `ia/` con los módulos específicos de IA (Gemini, extracción regex, spaCy); y `management/commands/` con el comando `enviar_recordatorios_fiscales`. `api_views.py`/`api_urls.py` exponen la API interna versionada (`/api/v1/`), documentada en `docs/api.md`. `rate_limit.py`, `analysis_capacity.py`, `middleware.py` y `logging_context.py`/`logging_utils.py` son la capa de hardening y observabilidad (límites de solicitudes por DB, límite de análisis concurrentes, logging JSON correlacionado por request). `docs/` contiene toda la documentación técnica de esta entrega. `tests/` tiene la suite de pruebas automatizadas (unitarias + integración + seguridad), corrida por `.github/workflows/ci.yml` en cada push/PR. `tessdata/` empaqueta el modelo de idioma español de Tesseract OCR (`spa.traineddata`), ya que la instalación de Tesseract a nivel de sistema operativo normalmente solo trae el paquete de inglés por defecto (ver `core/ocr_utils.py`).
+> `core/` concentra la app principal de Django: modelos, vistas, formularios, datos de referencia fiscal, y tres subcarpetas clave — `services/` con la orquestación del análisis, el asistente y el reporte anual en PDF; `ia/` con los módulos específicos de IA (Gemini, extracción regex, spaCy); y `management/commands/` con el comando `enviar_recordatorios_fiscales`. `api_views.py`/`api_urls.py` exponen la API interna versionada (`/api/v1/`), documentada en `docs/api.md`. `rate_limit.py`, `analysis_capacity.py`, `middleware.py` y `logging_context.py`/`logging_utils.py` son la capa de hardening y observabilidad (límites de solicitudes por DB, límite de análisis concurrentes, logging JSON correlacionado por request). `formularios_fiscales.py` guarda el catálogo de formularios del Ministerio de Hacienda con las keywords del checklist de Recursos Fiscales. `uso_gemini.py` registra los tokens de cada llamada a Gemini para el panel `/uso-gemini/`. `docs/` contiene toda la documentación técnica de esta entrega. `tests/` tiene la suite de pruebas automatizadas (unitarias + integración + seguridad), corrida por `.github/workflows/ci.yml` en cada push/PR. `tessdata/` empaqueta el modelo de idioma español de Tesseract OCR (`spa.traineddata`), ya que la instalación de Tesseract a nivel de sistema operativo normalmente solo trae el paquete de inglés por defecto (ver `core/ocr_utils.py`).
 
 ---
 
@@ -273,13 +283,17 @@ python manage.py enviar_recordatorios_fiscales --dias 3
 
 Revisa las fechas fiscales fijas (ISR mensual, IVA F-07, Renta F-11, cierre de ejercicio) y los eventos propios del calendario de cada usuario, y manda un correo (reutilizando el `EMAIL_BACKEND` SMTP ya configurado) a quien tenga algo venciendo dentro de la ventana de días indicada (`--dias`, default 3). Es un comando manual: el proyecto no tiene Celery ni ningún scheduler corriendo, así que para automatizarlo hay que agendarlo externamente, por ejemplo con el Programador de Tareas de Windows o un cron dentro del contenedor, ejecutando `docker compose exec web python manage.py enviar_recordatorios_fiscales` una vez al día. El comando no lleva registro de qué ya se envió, así que correrlo más de una vez el mismo día reenvía el correo a quien siga teniendo eventos en la ventana.
 
+### Panel de uso de Gemini
+
+`http://localhost:8000/uso-gemini/` (requiere `is_staff=True`, no está enlazado en el sidebar). Muestra tokens consumidos por usuario hoy/esta semana/este mes, y tres barras de progreso contra los límites reales del tier del proyecto en Google AI Studio (RPD, RPM, TPM), con la hora de reinicio del límite diario convertida a la zona horaria local. Los límites son configurables por variable de entorno (`TRIBUTIA_GEMINI_RPD_LIMITE`, `_RPM_LIMITE`, `_TPM_LIMITE`) porque dependen del modelo y del tier (gratuito vs. con billing) — hay que confirmarlos en [aistudio.google.com/rate-limit](https://aistudio.google.com/rate-limit) cada vez que cambien y actualizar el `.env`.
+
 ### Pruebas automatizadas
 
 ```bash
 python manage.py test
 ```
 
-Corre 61 pruebas (`tests/`): unitarias sobre la extracción por regex, el parseo de la respuesta de Gemini y el cálculo de `confianza_clasificacion`; integración del pipeline completo (`analizar_documento`) mockeando Tesseract/OCR y Gemini para que sean rápidas, deterministas y no consuman cuota real de la API; seguridad de la API, rate limiting y límite de análisis concurrentes (`test_api_seguridad.py`, `test_hotfix_*.py`); generación del reporte anual en PDF (`test_reportes.py`); y el comando de recordatorios por email, usando el backend de correo en memoria de Django para no enviar nada real (`test_recordatorios.py`). Se ejecutan automáticamente en cada push/PR vía GitHub Actions (`.github/workflows/ci.yml`). Evidencia de una corrida anterior en `docs/evidencia_tests_semana3.txt`.
+Corre 90 pruebas (`tests/`): unitarias sobre la extracción por regex, el parseo de la respuesta de Gemini y el cálculo de `confianza_clasificacion`; integración del pipeline completo (`analizar_documento`) mockeando Tesseract/OCR y Gemini para que sean rápidas, deterministas y no consuman cuota real de la API; seguridad de la API, rate limiting y límite de análisis concurrentes (`test_api_seguridad.py`, `test_hotfix_*.py`); generación del reporte anual en PDF y del CSV (`test_reportes.py`, `test_exportar_csv.py`); carga múltiple de documentos (`test_carga_lote.py`); feedback de clasificación (`test_feedback.py`); checklist de formularios (`test_checklist_declaracion.py`); tracking de uso de Gemini (`test_uso_gemini.py`); la página de onboarding (`test_como_funciona.py`); y el comando de recordatorios por email, usando el backend de correo en memoria de Django para no enviar nada real (`test_recordatorios.py`). Se ejecutan automáticamente en cada push/PR vía GitHub Actions (`.github/workflows/ci.yml`). Evidencia de una corrida anterior en `docs/evidencia_tests_semana3.txt`.
 
 ### Variables de entorno
 
@@ -316,7 +330,7 @@ Ver detalle completo en [`docs/riesgos-tecnicos.md`](docs/riesgos-tecnicos.md). 
 
 | Riesgo | Categoría | Probabilidad | Impacto | Mitigación propuesta |
 |---|---|---|---|---|
-| Cuota de la API de Gemini agotada bajo carga | Modelo | Media | Alta | Cachear resultados, cola con reintentos, monitorear consumo |
+| Cuota de la API de Gemini agotada bajo carga | Modelo | Baja | Alta | Billing habilitado (Tier 1, no tier gratuito) + panel `/uso-gemini/` con barras de progreso contra RPD/RPM/TPM reales. Sigue pendiente: cachear resultados y alerta automática (hoy el panel es de consulta manual) |
 | Pipeline de análisis síncrono y bloqueante | Código | Alta | Alta | Mover a cola de tareas (Celery/RQ) |
 | Sin validación de permisos por usuario en URLs directas | Seguridad | Media | Alta | Agregar checks de propiedad en todas las vistas sensibles |
 | Proyecto solo corre localmente, sin contenedor | Despliegue | Alta | Alta | Dockerizar en Semana 4 |
@@ -339,10 +353,12 @@ Ver detalle completo en [`docs/plan-mejora.md`](docs/plan-mejora.md).
 
 ## 14. Limitaciones Actuales
 
-- Solo se puede usar el modelo `gemini-2.5-flash-lite` sin incurrir en costos, lo que limita precisión frente a modelos más recientes.
+- El proyecto usa `gemini-2.5-flash` con billing habilitado (no el tier gratuito), así que hay un costo real por uso, aunque bajo (~$0.30/1M tokens de entrada, ~$2.50/1M de salida).
 - El pipeline de análisis es síncrono: documentos grandes o Gemini lento pueden causar timeouts.
 - Los recordatorios por email son un comando manual, sin scheduler integrado ni registro de qué ya se envió (correrlo dos veces el mismo día reenvía el correo).
 - El reporte anual en PDF y el simulador ISR usan los mismos umbrales de tramo (5%/10%/30%) que ya estaban duplicados en tres lugares del backend; no hay todavía un único punto de verdad para esa tabla.
+- El checklist de Recursos Fiscales matchea por palabras clave contra el tipo de documento detectado, no es una verificación exhaustiva — varios ítems (NIT, DUI, datos de cargas familiares) no son un "tipo de documento" identificable y siempre quedan marcados como pendientes de revisión manual.
+- `modelo_ia` (qué versión de Gemini analizó cada documento) solo se registra desde que se agregó ese campo — los documentos analizados antes quedan con ese dato vacío, no se puede reconstruir retroactivamente.
 - Manejo de errores incompleto en algunas etapas del pipeline (OCR, spaCy, Gemini).
 
 ---
@@ -364,7 +380,7 @@ Ver detalle completo en [`docs/plan-mejora.md`](docs/plan-mejora.md).
 ## 16. Créditos y Referencias
 
 - [Django](https://www.djangoproject.com/) 6.0.7
-- [Google Gemini API](https://ai.google.dev/) (`google-genai` 2.18.1, modelo `gemini-2.5-flash-lite`)
+- [Google Gemini API](https://ai.google.dev/) (`google-genai` 2.18.1, modelo `gemini-2.5-flash`)
 - [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) vía `pytesseract`
 - [spaCy](https://spacy.io/) con modelo `es_core_news_sm`
 - [PyMuPDF (fitz)](https://pymupdf.readthedocs.io/) para extracción de texto embebido en PDF y para generar el reporte anual en PDF

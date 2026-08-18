@@ -75,6 +75,12 @@ path(
 ),
 
 path(
+    'documentos/lote/',
+    views.subir_documentos_lote,
+    name='subir_documentos_lote'
+),
+
+path(
     'documento/<int:documento_id>/',
     views.detalle_documento,
     name='detalle_documento'
@@ -91,6 +97,12 @@ path(
     views.descargar_documento,
     name='descargar_documento'
 ),
+
+path(
+    'documento/<int:documento_id>/feedback/',
+    views.enviar_feedback_analisis,
+    name='enviar_feedback_analisis'
+),
 path(
     'centro-analisis/',
     views.centro_analisis,
@@ -101,6 +113,12 @@ path(
     'centro-analisis/reporte/',
     views.reporte_anual_pdf,
     name='reporte_anual_pdf'
+),
+
+path(
+    'centro-analisis/exportar/',
+    views.exportar_analisis_csv,
+    name='exportar_analisis_csv'
 ),
 path(
     'calendario/',
@@ -139,6 +157,12 @@ path(
 ),
 
 path(
+    'como-funciona/',
+    views.como_funciona,
+    name='como_funciona'
+),
+
+path(
     'api/calendario/evento/crear/',
     views.crear_evento,
     name='crear_evento'
@@ -148,6 +172,12 @@ path(
     'api/calendario/evento/<int:evento_id>/eliminar/',
     views.eliminar_evento,
     name='eliminar_evento'
+),
+
+path(
+    'uso-gemini/',
+    views.uso_gemini_resumen,
+    name='uso_gemini_resumen'
 ),
 
 ]

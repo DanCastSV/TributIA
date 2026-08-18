@@ -1,0 +1,124 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+
+{% block title %}Cómo funciona — TributIA{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    <div class="profile-card">
+        <h1>{% icon "sparkles" size=24 %} Cómo funciona TributIA</h1>
+        <p>
+            TributIA lee tus documentos tributarios (facturas, constancias, comprobantes), te dice si son
+            deducibles y cuánto podrías ahorrar en ISR, y te acompaña con recordatorios, reportes y un
+            asistente para que no se te escape nada. Esta guía resume el recorrido completo, paso a paso.
+        </p>
+    </div>
+
+    <div class="profile-card guia-paso">
+        <div class="guia-paso__numero">1</div>
+        <div class="guia-paso__body">
+            <h2>{% icon "user" size=20 %} Completá tu perfil</h2>
+            <p>
+                Agregá tu salario mensual y actividad económica en <strong>Mi Perfil</strong>. Sin esos dos datos,
+                TributIA no puede calcular tu tramo de ISR ni personalizar las respuestas del asistente — vas a ver
+                un aviso en Documentos y Asistente IA recordándotelo mientras falten.
+            </p>
+            <a href="{% url 'editar_perfil' %}" class="form-card__link">Completar mi perfil →</a>
+        </div>
+    </div>
+
+    <div class="profile-card guia-paso">
+        <div class="guia-paso__numero">2</div>
+        <div class="guia-paso__body">
+            <h2>{% icon "cloud-upload" size=20 %} Subí tus documentos</h2>
+            <p>
+                En <strong>Documentos</strong> podés subir de a uno o varios a la vez (hasta 10 en carga múltiple).
+                Aceptamos PDF, JPG y PNG de hasta 20MB. Cada documento pasa por OCR y por Gemini, que decide si es
+                un documento tributario salvadoreño válido, si es deducible, y extrae empresa, fecha, montos y más.
+                Si el documento no es tributario, se rechaza automáticamente y no queda guardado.
+            </p>
+            <a href="{% url 'documentos' %}" class="form-card__link">Ir a Documentos →</a>
+        </div>
+    </div>
+
+    <div class="profile-card guia-paso">
+        <div class="guia-paso__numero">3</div>
+        <div class="guia-paso__body">
+            <h2>{% icon "search" size=20 %} Revisá el análisis</h2>
+            <p>
+                Entrá al detalle de cualquier documento para ver lo que TributIA detectó: empresa, montos, si es
+                deducible y por qué, y un resumen en lenguaje simple. Si algo está mal, marcalo con 👎 "Hay un
+                error" — ese feedback nos ayuda a mejorar el análisis con el tiempo.
+            </p>
+        </div>
+    </div>
+
+    <div class="profile-card guia-paso">
+        <div class="guia-paso__numero">4</div>
+        <div class="guia-paso__body">
+            <h2>{% icon "chart-bar" size=20 %} Centro de Análisis</h2>
+            <p>
+                Acá ves el panorama completo: cuánto llevás facturado, cuánto es deducible, tu ahorro estimado de
+                ISR, y la tendencia mensual de tus gastos. El <strong>simulador</strong> te deja probar "¿qué
+                pasaría si gasto $X más en algo deducible?" sin subir ningún documento. Y cuando quieras llevarte
+                todo, podés <strong>descargar un reporte anual en PDF</strong> o <strong>exportar a CSV</strong>.
+            </p>
+            <a href="{% url 'centro_analisis' %}" class="form-card__link">Ir a Centro de Análisis →</a>
+        </div>
+    </div>
+
+    <div class="profile-card guia-paso">
+        <div class="guia-paso__numero">5</div>
+        <div class="guia-paso__body">
+            <h2>{% icon "calendar" size=20 %} Calendario fiscal</h2>
+            <p>
+                Además de las fechas fijas de El Salvador (IVA mensual, Renta anual, etc.), TributIA crea eventos
+                automáticamente cuando detecta una fecha en un documento que subiste, y podés agregar tus propios
+                recordatorios a mano.
+            </p>
+            <a href="{% url 'calendario' %}" class="form-card__link">Ir a Calendario →</a>
+        </div>
+    </div>
+
+    <div class="profile-card guia-paso">
+        <div class="guia-paso__numero">6</div>
+        <div class="guia-paso__body">
+            <h2>{% icon "book-open" size=20 %} Recursos Fiscales</h2>
+            <p>
+                Un catálogo de los formularios del Ministerio de Hacienda (F-07, F-11, F-930, etc.) con los
+                documentos que necesitás para cada uno — y un checklist que marca cuáles ya tenés según lo que
+                llevás subido, para que sepas qué te falta antes de presentar.
+            </p>
+            <a href="{% url 'recursos_fiscales' %}" class="form-card__link">Ir a Recursos Fiscales →</a>
+        </div>
+    </div>
+
+    <div class="profile-card guia-paso">
+        <div class="guia-paso__numero">7</div>
+        <div class="guia-paso__body">
+            <h2>{% icon "bot" size=20 %} Asistente IA</h2>
+            <p>
+                Preguntale lo que quieras sobre tus impuestos — cálculos de ISR, deducciones, plazos. Responde con
+                tu perfil y tus documentos ya analizados como contexto, así que las respuestas son sobre tu
+                situación real, no genéricas.
+            </p>
+            <a href="{% url 'asistente_ia' %}" class="form-card__link">Ir al Asistente →</a>
+        </div>
+    </div>
+
+    <div class="aviso-legal">
+        <div class="aviso-legal__icono">{% icon "triangle-alert" size=22 %}</div>
+        <div class="aviso-legal__body">
+            <strong>Importante</strong>
+            <p>
+                TributIA es una herramienta de orientación, no reemplaza a un contador público certificado. La
+                precisión del análisis depende de la calidad del documento y del OCR — revisá siempre los datos
+                antes de usarlos en una declaración real, y ante cualquier duda consultá con un profesional o con
+                el Ministerio de Hacienda de El Salvador.
+            </p>
+        </div>
+    </div>
+
+</div>
+{% endblock %}

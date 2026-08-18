@@ -65,7 +65,7 @@ def metadata(request):
         "tecnologia": {
             "ocr": "Tesseract OCR (pytesseract) + PyMuPDF (texto embebido en PDF)",
             "nlp": "spaCy (es_core_news_sm)",
-            "llm": "Google Gemini (gemini-2.5-flash-lite)",
+            "llm": "Google Gemini (gemini-2.5-flash)",
         },
         "endpoint_principal": {
             "ruta": "/api/v1/analizar-documento/",

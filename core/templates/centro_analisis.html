@@ -24,6 +24,9 @@
                 <button type="submit" class="btn-primary">
                     {% icon "file-check" size=16 %} Descargar PDF
                 </button>
+                <button type="submit" formaction="{% url 'exportar_analisis_csv' %}" class="btn-secondary">
+                    {% icon "file-text" size=16 %} Exportar CSV
+                </button>
             </form>
             {% endif %}
         </div>

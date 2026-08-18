@@ -1,0 +1,116 @@
+{% extends 'base_dashboard.html' %}
+{% load icons %}
+
+{% block title %}Uso de Gemini — TributIA{% endblock %}
+
+{% block content %}
+<div class="container">
+
+    <div class="profile-card">
+        <h1>{% icon "brain" size=24 %} Uso de Gemini por usuario</h1>
+        <p>Panel de administración — no lo ve un usuario final. Google no desglosa la cuota por usuario de la app, así que este conteo se guarda localmente en cada llamada real a Gemini.</p>
+    </div>
+
+    <div class="db-kpi-grid">
+        <div class="kpi-card kpi-card--default">
+            <div class="kpi-card__icon">{% icon "clock" size=24 %}</div>
+            <div class="kpi-card__value">{{ totales.hoy }}</div>
+            <div class="kpi-card__label">Tokens hoy</div>
+        </div>
+        <div class="kpi-card kpi-card--blue">
+            <div class="kpi-card__icon">{% icon "calendar" size=24 %}</div>
+            <div class="kpi-card__value">{{ totales.semana }}</div>
+            <div class="kpi-card__label">Tokens esta semana</div>
+        </div>
+        <div class="kpi-card kpi-card--purple">
+            <div class="kpi-card__icon">{% icon "chart-bar" size=24 %}</div>
+            <div class="kpi-card__value">{{ totales.mes }}</div>
+            <div class="kpi-card__label">Tokens este mes</div>
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <h2>{% icon "triangle-alert" size=20 %} Límites del tier gratuito</h2>
+        <p class="ca-subtexto">
+            Según aistudio.google.com/rate-limit. Estos números son por modelo y por tier — si cambiás de modelo o
+            activás billing, entrá a ese panel y actualizá <code>TRIBUTIA_GEMINI_RPD_LIMITE</code> /
+            <code>_RPM_LIMITE</code> / <code>_TPM_LIMITE</code> en el <code>.env</code> con los valores reales.
+        </p>
+
+        <div class="limite-gemini">
+            <div class="limite-gemini__header">
+                <span>Solicitudes hoy (RPD)</span>
+                <strong>{{ limites.rpd.usado }} / {{ limites.rpd.limite }}</strong>
+            </div>
+            <div class="kpi-progress">
+                <div class="kpi-progress__bar {% if limites.rpd.pct >= 80 %}kpi-progress__bar--peligro{% endif %}"
+                     data-pct="{{ limites.rpd.pct }}"></div>
+            </div>
+            <p class="limite-gemini__nota">
+                Se reinicia a medianoche hora Pacífico — en {{ limites.reset_en }}
+                ({{ limites.reset_local|date:"d/m H:i" }} tu hora).
+            </p>
+        </div>
+
+        <div class="limite-gemini">
+            <div class="limite-gemini__header">
+                <span>Solicitudes en el último minuto (RPM)</span>
+                <strong>{{ limites.rpm.usado }} / {{ limites.rpm.limite }}</strong>
+            </div>
+            <div class="kpi-progress">
+                <div class="kpi-progress__bar {% if limites.rpm.pct >= 80 %}kpi-progress__bar--peligro{% endif %}"
+                     data-pct="{{ limites.rpm.pct }}"></div>
+            </div>
+        </div>
+
+        <div class="limite-gemini">
+            <div class="limite-gemini__header">
+                <span>Tokens en el último minuto (TPM)</span>
+                <strong>{{ limites.tpm.usado }} / {{ limites.tpm.limite }}</strong>
+            </div>
+            <div class="kpi-progress">
+                <div class="kpi-progress__bar {% if limites.tpm.pct >= 80 %}kpi-progress__bar--peligro{% endif %}"
+                     data-pct="{{ limites.tpm.pct }}"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="profile-card">
+        <h2>{% icon "clipboard-list" size=20 %} Por usuario</h2>
+
+        {% if por_usuario %}
+        <div class="analisis-table-wrap">
+            <table class="analisis-table">
+                <thead>
+                    <tr>
+                        <th>Usuario</th>
+                        <th class="text-right">Llamadas a Gemini</th>
+                        <th class="text-right">Tokens totales</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for fila in por_usuario %}
+                    <tr>
+                        <td>{{ fila.usuario__username }}</td>
+                        <td class="text-right">{{ fila.llamadas }}</td>
+                        <td class="text-right">{{ fila.tokens }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="ca-subtexto">Todavía no hay registros de uso de Gemini.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('[data-pct]').forEach(function (el) {
+    el.style.width = (parseFloat(el.dataset.pct) || 0) + '%';
+});
+</script>
+{% endblock %}

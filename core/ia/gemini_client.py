@@ -6,10 +6,11 @@ from google import genai
 from google.genai import types
 
 from core.datos_el_salvador import DATOS_EL_SALVADOR
+from core.uso_gemini import registrar_uso_gemini
 
 logger = logging.getLogger(__name__)
 
-MODEL_NAME = "gemini-2.5-flash-lite"
+MODEL_NAME = "gemini-2.5-flash"
 
 cliente = genai.Client(
     api_key=settings.GEMINI_API_KEY,
@@ -146,7 +147,7 @@ def _extraer_json(texto_respuesta):
     return json.loads(texto[inicio:fin + 1])
 
 
-def analizar_documento_con_gemini(texto_ocr, datos_extraidos):
+def analizar_documento_con_gemini(texto_ocr, datos_extraidos, usuario=None):
     """
     Analiza el texto real extraído de un documento (OCR o texto digital)
     junto con los datos preliminares detectados por regex/spaCy, y le pide
@@ -220,6 +221,8 @@ Extrae los campos directamente del TEXTO REAL del documento. No uses los datos p
                 max_output_tokens=2048,
             ),
         )
+
+        registrar_uso_gemini(usuario, 'analisis_documento', respuesta)
 
         data = _validar_respuesta(_extraer_json(respuesta.text))
 

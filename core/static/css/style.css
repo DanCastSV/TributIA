@@ -1594,6 +1594,51 @@ textarea:focus{
     font-weight:700;
 }
 
+/* Checklist con estado cubierto/pendiente (reemplaza el bullet por un ícono) */
+.form-card__checklist li{
+    display:flex;
+    align-items:flex-start;
+    gap:6px;
+    padding-left:0;
+}
+.form-card__checklist li::before{ content:none; }
+.form-card__checklist li svg{
+    flex-shrink:0;
+    margin-top:1px;
+    color:var(--text-secondary);
+    opacity:.5;
+}
+.form-card__checklist-item--cubierto{ color:var(--text-dark); }
+.form-card__checklist-item--cubierto svg{
+    color:var(--primary-green);
+    opacity:1;
+}
+
+.form-card__checklist-contador{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    font-size:11.5px;
+    font-weight:600;
+    color:var(--primary-green);
+    background:var(--primary-green-light,#ecfdf5);
+    padding:4px 10px;
+    border-radius:20px;
+    margin-bottom:10px;
+    width:fit-content;
+}
+
+.form-card__checklist-nota{
+    font-size:11px;
+    color:var(--text-light);
+    opacity:.8;
+    margin-top:10px;
+    display:flex;
+    align-items:flex-start;
+    gap:5px;
+    line-height:1.4;
+}
+
 .form-card__link{
     display:inline-flex;
     align-items:center;
@@ -1610,6 +1655,44 @@ textarea:focus{
     align-self:flex-start;
 }
 .form-card__link:hover{ background:#047857; }
+
+/* ── Guía "Cómo funciona" ── */
+.guia-paso{
+    display:flex;
+    gap:16px;
+    align-items:flex-start;
+}
+.guia-paso__numero{
+    flex-shrink:0;
+    width:36px;
+    height:36px;
+    border-radius:50%;
+    background:var(--primary-green);
+    color:#fff;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-weight:700;
+    font-size:15px;
+}
+.guia-paso__body{ flex:1; min-width:0; }
+.guia-paso__body h2{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:8px;
+    font-size:17px;
+}
+.guia-paso__body p{
+    color:var(--text-light);
+    line-height:1.65;
+    margin-bottom:12px;
+}
+
+@media(max-width:480px){
+    .guia-paso{ gap:12px; }
+    .guia-paso__numero{ width:30px; height:30px; font-size:13px; }
+}
 
 .aviso-final{
     display:flex;
@@ -1914,6 +1997,44 @@ textarea:focus{
    SUBIDA DE ARCHIVOS
 ========================== */
 
+.upload-modo-toggle{
+    display:flex;
+    gap:8px;
+    background:var(--bg-light);
+    padding:5px;
+    border-radius:12px;
+    margin-bottom:20px;
+    width:fit-content;
+}
+
+.upload-modo-btn{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:9px 16px;
+    border:none;
+    border-radius:8px;
+    background:transparent;
+    color:var(--text-light);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    transition:all .15s;
+}
+
+.upload-modo-btn:hover{ color:var(--text-dark); }
+
+.upload-modo-btn.is-active{
+    background:var(--bg-card);
+    color:var(--primary-green);
+    box-shadow:var(--shadow-sm);
+}
+
+@media(max-width:480px){
+    .upload-modo-toggle{ width:100%; }
+    .upload-modo-btn{ flex:1; justify-content:center; }
+}
+
 .upload-trigger{
     display:flex;
     flex-direction:column;
@@ -2108,6 +2229,60 @@ textarea:focus{
 
 .callout-neutral{
     background:var(--bg-light);
+}
+
+/* ── Feedback del usuario sobre la clasificación ── */
+.feedback-analisis{
+    margin-top:20px;
+    padding-top:16px;
+    border-top:1px solid var(--border-lighter);
+}
+.feedback-analisis__titulo{
+    display:block;
+    font-size:13.5px;
+    color:var(--text-dark);
+    margin-bottom:10px;
+}
+.feedback-analisis__botones{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+}
+.feedback-btn{
+    padding:9px 16px;
+    border-radius:8px;
+    border:1px solid var(--border-light);
+    background:var(--bg-card);
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    transition:all .15s;
+}
+.feedback-btn--positivo:hover{
+    background:var(--primary-green-light);
+    border-color:var(--primary-green);
+}
+.feedback-btn--negativo:hover{
+    background:var(--danger-red-light);
+    border-color:var(--danger-red);
+}
+.feedback-analisis__comentario{
+    margin-top:12px;
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    max-width:420px;
+}
+.feedback-analisis__comentario textarea{
+    resize:vertical;
+}
+.feedback-analisis__comentario button{
+    align-self:flex-start;
+}
+.feedback-analisis__estado{
+    margin-top:10px;
+    font-size:13px;
+    color:var(--text-light);
 }
 
 /* Pills de estado tributario/deducible */
@@ -2701,6 +2876,32 @@ textarea:focus{
     background:var(--primary-color);
     width:0;
     transition:width .6s ease;
+}
+
+.kpi-progress__bar--peligro{
+    background:var(--danger-red);
+}
+
+/* ── Límites de Gemini (panel /uso-gemini/) ── */
+.limite-gemini{
+    margin-bottom:20px;
+}
+.limite-gemini:last-child{ margin-bottom:0; }
+.limite-gemini__header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    font-size:13.5px;
+    color:var(--text-dark);
+    margin-bottom:6px;
+}
+.limite-gemini .kpi-progress{
+    height:8px;
+}
+.limite-gemini__nota{
+    font-size:11.5px;
+    color:var(--text-light);
+    margin-top:6px;
 }
 
 /* Layout fila clasificación + ISR */

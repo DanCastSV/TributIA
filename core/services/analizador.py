@@ -128,7 +128,8 @@ def analizar_documento(documento):
             "subtotal": resumen.get("subtotal"),
             "iva": resumen.get("iva"),
             "total": resumen.get("total"),
-        }
+        },
+        usuario=documento.usuario,
     )
     logger.info("etapa_completada", extra={
         "documento_id": documento_id,
@@ -177,6 +178,8 @@ def analizar_documento(documento):
         documento=documento,
 
         texto_extraido=texto,
+
+        modelo_ia=MODEL_NAME,
 
         # IDENTIFICADORES — Gemini primero, regex como fallback
         nit_tradicional=_primero(

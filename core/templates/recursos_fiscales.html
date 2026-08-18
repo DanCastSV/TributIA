@@ -52,6 +52,10 @@
                 <div class="form-card__icono">{% icon f.icono size=20 %}</div>
             </div>
 
+            <span class="form-card__checklist-contador">
+                {% icon "circle-check" size=13 %} {{ f.cubiertos }}/{{ f.total }} documentos que ya tenés
+            </span>
+
             <h3 class="form-card__nombre">{{ f.nombre }}</h3>
 
             <div class="form-card__periodo">
@@ -62,11 +66,17 @@
 
             <div class="form-card__docs">
                 <strong>{% icon "file-text" size=13 %} Documentos requeridos</strong>
-                <ul>
+                <ul class="form-card__checklist">
                     {% for doc in f.documentos %}
-                    <li>{{ doc }}</li>
+                    <li class="{% if doc.cubierto %}form-card__checklist-item--cubierto{% endif %}">
+                        {% if doc.cubierto %}{% icon "circle-check" size=14 %}{% else %}{% icon "circle" size=14 %}{% endif %}
+                        {{ doc.texto }}
+                    </li>
                     {% endfor %}
                 </ul>
+                <p class="form-card__checklist-nota">
+                    {% icon "info" size=12 %} Coincidencia aproximada por tipo de documento — revisa cada ítem antes de presentar tu declaración.
+                </p>
             </div>
 
             {% if f.url %}

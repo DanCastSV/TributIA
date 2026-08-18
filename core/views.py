@@ -1,21 +1,29 @@
 import calendar as cal_lib
+import csv
+import io
 import json
 import logging
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
-from django.db.models import Q, Sum
+from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core.analysis_capacity import CapacidadAnalisisAgotada, reservar_capacidad_analisis
 from core.datos_el_salvador import DATOS_EL_SALVADOR
 from core.fechas_fiscales import fechas_fiscales_mes
+from core.formularios_fiscales import formularios_con_checklist
+from core.ocr_utils import validar_archivo
 from core.rate_limit import limitar_solicitudes
 from core.services.reportes import generar_reporte_anual_pdf
 from core.services.analizador import DocumentoNoTributarioError, analizar_documento
@@ -29,6 +37,7 @@ from .models import (
     EventoCalendario,
     MensajeConversacion,
     PerfilTributario,
+    UsoGemini,
 )
 
 logger = logging.getLogger(__name__)
@@ -473,6 +482,90 @@ def documentos(request):
         }
     )
 
+MAX_ARCHIVOS_LOTE = 10
+
+
+@login_required
+@require_http_methods(['POST'])
+@limitar_solicitudes(
+    ambito='documentos-lote',
+    limite=3,
+    ventana_segundos=300,
+    clave='usuario',
+)
+def subir_documentos_lote(request):
+    """
+    Carga múltiple: sube y analiza hasta MAX_ARCHIVOS_LOTE archivos en un
+    solo request. Vista separada de `documentos()` (no una extracción de
+    esa función) para no tocar su lógica ya cubierta por
+    tests/test_hotfix_uploads.py y tests/test_hotfix_concurrency.py.
+    """
+    archivos = request.FILES.getlist('archivos')
+
+    if not archivos:
+        messages.warning(request, 'No seleccionaste ningún archivo.')
+        return redirect('documentos')
+
+    ignorados = max(0, len(archivos) - MAX_ARCHIVOS_LOTE)
+    archivos = archivos[:MAX_ARCHIVOS_LOTE]
+
+    analizados = 0
+    rechazados = 0
+    con_error = 0
+    detenido_por_capacidad = False
+
+    for archivo in archivos:
+        es_valido, mensaje_validacion = validar_archivo(archivo)
+        if not es_valido:
+            rechazados += 1
+            continue
+
+        try:
+            with reservar_capacidad_analisis():
+                doc = DocumentoTributario.objects.create(
+                    usuario=request.user,
+                    nombre=archivo.name,
+                    archivo=archivo,
+                )
+                try:
+                    analizar_documento(doc)
+                    analizados += 1
+                except DocumentoNoTributarioError:
+                    rechazados += 1
+                except Exception as e:
+                    logger.error(
+                        'analisis_lote_fallido',
+                        extra={'documento_id': doc.id, 'tipo_error': type(e).__name__},
+                    )
+                    doc.estado = 'error'
+                    doc.save()
+                    con_error += 1
+        except CapacidadAnalisisAgotada:
+            logger.warning('analisis_lote_rechazado', extra={'tipo_error': 'capacidad_agotada'})
+            detenido_por_capacidad = True
+            break
+
+    partes = []
+    if analizados:
+        partes.append(f'{analizados} analizado{"s" if analizados != 1 else ""}')
+    if rechazados:
+        partes.append(f'{rechazados} rechazado{"s" if rechazados != 1 else ""} (no tributario o inválido)')
+    if con_error:
+        partes.append(f'{con_error} con error')
+
+    resumen = ', '.join(partes) if partes else 'no se procesó ningún archivo'
+    mensaje = f'Carga múltiple: {resumen}.'
+    if detenido_por_capacidad:
+        mensaje += ' Hay varios documentos en proceso; el resto del lote no se procesó, inténtalo de nuevo en unos segundos.'
+    if ignorados:
+        mensaje += f' Se ignoraron {ignorados} archivo{"s" if ignorados != 1 else ""} por superar el máximo de {MAX_ARCHIVOS_LOTE} por carga.'
+
+    nivel = messages.WARNING if (rechazados or con_error or detenido_por_capacidad or ignorados) else messages.SUCCESS
+    messages.add_message(request, nivel, mensaje)
+
+    return redirect('documentos')
+
+
 @login_required
 @require_http_methods(['POST'])
 def eliminar_documento(request, documento_id):
@@ -520,6 +613,30 @@ def detalle_documento(request, documento_id):
             'analisis': analisis
         }
     )
+
+
+@login_required
+@require_http_methods(['POST'])
+def enviar_feedback_analisis(request, documento_id):
+    documento = get_object_or_404(
+        DocumentoTributario,
+        id=documento_id,
+        usuario=request.user
+    )
+    analisis = get_object_or_404(AnalisisDocumento, documento=documento)
+
+    valor = request.POST.get('feedback')
+    if valor not in dict(AnalisisDocumento.FEEDBACK_CHOICES):
+        return JsonResponse({'error': 'valor_invalido'}, status=400)
+
+    analisis.feedback_usuario = valor
+    analisis.feedback_comentario = request.POST.get('comentario', '').strip()[:2000] if valor == 'incorrecto' else ''
+    analisis.save(update_fields=['feedback_usuario', 'feedback_comentario', 'actualizado_en'])
+
+    return JsonResponse({
+        'estado': 'guardado',
+        'feedback_usuario': analisis.feedback_usuario,
+    })
 
 
 @login_required
@@ -694,6 +811,64 @@ def reporte_anual_pdf(request):
     respuesta['Content-Disposition'] = f'attachment; filename="tributia-{anio}.pdf"'
     return respuesta
 
+
+@login_required
+def exportar_analisis_csv(request):
+    try:
+        anio = int(request.GET.get('anio', date.today().year))
+    except (TypeError, ValueError):
+        anio = date.today().year
+
+    analisis = (
+        AnalisisDocumento.objects
+        .filter(documento__usuario=request.user, fecha_analisis__year=anio)
+        .select_related('documento')
+        .order_by('fecha_analisis')
+    )
+
+    buffer = io.StringIO()
+    escritor = csv.writer(buffer)
+    escritor.writerow([
+        'ID', 'Empresa', 'Cliente', 'Fecha documento', 'Número documento',
+        'Tipo detectado', 'Categoría detectada',
+        'NIT tradicional', 'Identificador homologado', 'NRC', 'Teléfono', 'Correo', 'Giro', 'Dirección',
+        'Subtotal', 'IVA', 'Otros cargos', 'Total',
+        'Tributario', 'Deducible', 'Justificación deducible',
+        'Confianza clasificación', 'Modelo IA', 'Fecha de análisis',
+    ])
+    for a in analisis:
+        escritor.writerow([
+            a.documento_id,
+            a.nombre_empresa or a.documento.nombre,
+            a.nombre_cliente or '',
+            a.fecha_documento or '',
+            a.numero_documento or '',
+            a.tipo_documento_detectado or '',
+            a.categoria_detectada or '',
+            a.nit_tradicional or '',
+            a.identificador_homologado or '',
+            a.nrc or '',
+            a.telefono or '',
+            a.correo or '',
+            a.giro or '',
+            a.direccion_detectada or '',
+            a.subtotal if a.subtotal is not None else '',
+            a.iva if a.iva is not None else '',
+            a.otros_cargos if a.otros_cargos is not None else '',
+            a.total if a.total is not None else '',
+            'Sí' if a.es_documento_tributario else 'No' if a.es_documento_tributario is False else '',
+            'Sí' if a.es_deducible else 'No' if a.es_deducible is False else '',
+            a.justificacion_deducible or '',
+            a.confianza_clasificacion,
+            a.modelo_ia or '',
+            a.fecha_analisis.strftime('%d/%m/%Y'),
+        ])
+
+    respuesta = HttpResponse(buffer.getvalue(), content_type='text/csv; charset=utf-8')
+    respuesta['Content-Disposition'] = f'attachment; filename="tributia-{anio}.csv"'
+    return respuesta
+
+
 @login_required
 def calendario(request):
     today = date.today()
@@ -821,103 +996,18 @@ def eliminar_evento(request, evento_id):
 
 @login_required
 def recursos_fiscales(request):
-    FORMULARIOS = [
-        {
-            'codigo': 'F-07',
-            'nombre': 'Declaración y Pago del IVA',
-            'periodicidad': 'Mensual',
-            'descripcion': 'Declaración del Impuesto a la Transferencia de Bienes Muebles y Prestación de Servicios (IVA 13%). Debe presentarse dentro de los primeros 10 días hábiles del mes siguiente.',
-            'documentos': [
-                'Libro de compras IVA (comprobantes de crédito fiscal recibidos)',
-                'Libro de ventas IVA (facturas y comprobantes emitidos)',
-                'Comprobantes de retención del 1% recibidos',
-                'NIT y NRC del contribuyente',
-                'Estados de cuenta bancarios del período',
-            ],
-            'icono': 'receipt',
-            'url': 'https://www.mh.gob.sv/',
-            'url_label': 'Ver en sitio del Ministerio de Hacienda',
-        },
-        {
-            'codigo': 'F-11',
-            'nombre': 'Declaración del Impuesto sobre la Renta',
-            'periodicidad': 'Anual (120 días hábiles tras el cierre del ejercicio)',
-            'descripcion': 'Declaración anual del ISR para personas naturales y jurídicas. El ejercicio fiscal cierra el 31 de diciembre. Se presenta generalmente en abril del año siguiente.',
-            'documentos': [
-                'Constancia de salario o ingresos del año (emitida por el empleador)',
-                'Comprobantes de deducciones: gastos de salud, educación, intereses hipotecarios',
-                'Certificados de retención de ISR recibidos',
-                'Información de cargas familiares (cónyuge, hijos)',
-                'NIT del contribuyente y de dependientes',
-                'Estados financieros (para empresas y profesionales independientes)',
-            ],
-            'icono': 'file-check',
-            'url': 'https://www.mh.gob.sv/',
-            'url_label': 'Ver en sitio del Ministerio de Hacienda',
-        },
-        {
-            'codigo': 'F-14',
-            'nombre': 'Declaración del Pago a Cuenta e ISR Retenido',
-            'periodicidad': 'Mensual',
-            'descripcion': 'Pago mensual del 1.75% sobre ingresos brutos (pago a cuenta del ISR anual) y entero de las retenciones de ISR realizadas a empleados y terceros.',
-            'documentos': [
-                'Planilla de sueldos del mes con retenciones ISR calculadas',
-                'Registros de ingresos brutos del mes',
-                'Comprobantes de retenciones efectuadas a terceros',
-                'NIT del agente de retención',
-            ],
-            'icono': 'dollar-sign',
-            'url': 'https://www.mh.gob.sv/',
-            'url_label': 'Ver en sitio del Ministerio de Hacienda',
-        },
-        {
-            'codigo': 'F-910',
-            'nombre': 'Informe Mensual de Retenciones, Percepciones y Anticipo a Cuenta del IVA',
-            'periodicidad': 'Mensual',
-            'descripcion': 'Informe de las retenciones del 1% de IVA efectuadas a proveedores, percepciones cobradas a clientes y anticipos a cuenta. Aplica a grandes contribuyentes y contribuyentes designados.',
-            'documentos': [
-                'Comprobantes de retención del 1% emitidos y recibidos',
-                'Registro de compras a proveedores del período',
-                'NIT de los proveedores a quienes se retuvo',
-                'Comprobantes de crédito fiscal del período',
-            ],
-            'icono': 'percent',
-            'url': 'https://www.mh.gob.sv/',
-            'url_label': 'Ver en sitio del Ministerio de Hacienda',
-        },
-        {
-            'codigo': 'F-930',
-            'nombre': 'Declaración de Renta para Personas Naturales Asalariadas',
-            'periodicidad': 'Anual (simplificada)',
-            'descripcion': 'Versión simplificada del F-11 para empleados en relación de dependencia que solo perciben salarios. Solo aplica si los ingresos superan $50,000 anuales o si se desean aplicar deducciones adicionales.',
-            'documentos': [
-                'Constancia de sueldo anual emitida por el patrono',
-                'DUI y NIT del empleado',
-                'Comprobantes de deducciones adicionales (salud, educación, préstamos)',
-                'Datos de cargas familiares si aplica',
-            ],
-            'icono': 'user',
-            'url': 'https://www.mh.gob.sv/',
-            'url_label': 'Ver en sitio del Ministerio de Hacienda',
-        },
-        {
-            'codigo': 'F-456',
-            'nombre': 'Solicitud de Inscripción / Actualización en el Registro Tributario',
-            'periodicidad': 'Una sola vez (o al actualizar datos)',
-            'descripcion': 'Formulario para inscribirse como contribuyente, obtener el NIT, registrar o modificar actividad económica, y actualizar información en el Ministerio de Hacienda.',
-            'documentos': [
-                'DUI vigente del solicitante o representante legal',
-                'NIT (si ya está inscrito y desea actualizar)',
-                'Escritura de constitución (para personas jurídicas)',
-                'Credencial del representante legal',
-                'Contrato de arrendamiento o título de propiedad del local (dirección fiscal)',
-            ],
-            'icono': 'landmark',
-            'url': 'https://www.mh.gob.sv/',
-            'url_label': 'Ver en sitio del Ministerio de Hacienda',
-        },
-    ]
-    return render(request, 'recursos_fiscales.html', {'formularios': FORMULARIOS})
+    analisis_usuario = AnalisisDocumento.objects.filter(
+        documento__usuario=request.user
+    ).select_related('documento')
+
+    formularios = formularios_con_checklist(analisis_usuario)
+
+    return render(request, 'recursos_fiscales.html', {'formularios': formularios})
+
+
+@login_required
+def como_funciona(request):
+    return render(request, 'como_funciona.html')
 
 
 @login_required
@@ -1100,5 +1190,76 @@ def eliminar_conversacion(request, conversacion_id):
     )
     conversacion.delete()
     return JsonResponse({'estado': 'eliminado'})
+
+
+@staff_member_required
+def uso_gemini_resumen(request):
+    """
+    Panel de administración (no enlazado en el sidebar) para ver cuántos
+    tokens de Gemini consume cada usuario, y qué tan cerca está el
+    proyecto de los límites del tier gratuito (RPD/RPM/TPM). Google no
+    desglosa nada de esto por usuario de la app, solo un total por
+    proyecto — por eso se registra localmente en core/uso_gemini.py.
+    """
+    ahora = timezone.now()
+    hoy = timezone.localdate()
+    inicio_semana = hoy - timedelta(days=hoy.weekday())
+
+    def _total_tokens(qs):
+        return qs.aggregate(total=Sum('tokens_total'))['total'] or 0
+
+    todos = UsoGemini.objects.all()
+
+    totales = {
+        'hoy': _total_tokens(todos.filter(creado_en__date=hoy)),
+        'semana': _total_tokens(todos.filter(creado_en__date__gte=inicio_semana)),
+        'mes': _total_tokens(todos.filter(creado_en__year=hoy.year, creado_en__month=hoy.month)),
+    }
+
+    por_usuario = (
+        todos.values('usuario__username')
+        .annotate(llamadas=Count('id'), tokens=Sum('tokens_total'))
+        .order_by('-tokens')
+    )
+
+    # ── Límites del tier gratuito (RPD diario, RPM/TPM por minuto) ──
+    limite_rpd = getattr(settings, 'TRIBUTIA_GEMINI_RPD_LIMITE', 20)
+    limite_rpm = getattr(settings, 'TRIBUTIA_GEMINI_RPM_LIMITE', 10)
+    limite_tpm = getattr(settings, 'TRIBUTIA_GEMINI_TPM_LIMITE', 250_000)
+
+    hace_un_minuto = ahora - timedelta(minutes=1)
+    ultimo_minuto = todos.filter(creado_en__gte=hace_un_minuto)
+
+    solicitudes_hoy = todos.filter(creado_en__date=hoy).count()
+    solicitudes_ultimo_minuto = ultimo_minuto.count()
+    tokens_ultimo_minuto = _total_tokens(ultimo_minuto)
+
+    def _pct(usado, limite):
+        return min(100, round(usado / limite * 100)) if limite else 0
+
+    # El RPD de Gemini se reinicia a medianoche hora Pacífico.
+    pacifico = ZoneInfo('America/Los_Angeles')
+    ahora_pacifico = ahora.astimezone(pacifico)
+    proximo_reset_pacifico = (ahora_pacifico + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    proximo_reset_local = proximo_reset_pacifico.astimezone(ZoneInfo(settings.TIME_ZONE))
+    segundos_para_reset = int((proximo_reset_pacifico - ahora).total_seconds())
+    horas_para_reset, resto = divmod(max(0, segundos_para_reset), 3600)
+    minutos_para_reset = resto // 60
+
+    limites = {
+        'rpd': {'usado': solicitudes_hoy, 'limite': limite_rpd, 'pct': _pct(solicitudes_hoy, limite_rpd)},
+        'rpm': {'usado': solicitudes_ultimo_minuto, 'limite': limite_rpm, 'pct': _pct(solicitudes_ultimo_minuto, limite_rpm)},
+        'tpm': {'usado': tokens_ultimo_minuto, 'limite': limite_tpm, 'pct': _pct(tokens_ultimo_minuto, limite_tpm)},
+        'reset_local': proximo_reset_local,
+        'reset_en': f'{horas_para_reset}h {minutos_para_reset}min',
+    }
+
+    return render(request, 'uso_gemini.html', {
+        'totales': totales,
+        'por_usuario': por_usuario,
+        'limites': limites,
+    })
 
 
