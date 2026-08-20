@@ -110,13 +110,32 @@ Documentos
 
     <div class="profile-card">
 
-        <h2>Documentos Cargados</h2>
+        <div class="doc-list-header">
+            <h2>Documentos Cargados</h2>
+
+            {% if documentos %}
+            <div class="doc-list-acciones">
+                <label class="doc-seleccionar-todos">
+                    <input type="checkbox" id="doc-seleccionar-todos">
+                    Seleccionar todos
+                </label>
+                <button type="button" class="btn-danger" id="btn-eliminar-seleccionados" disabled>
+                    {% icon "trash-2" size=16 %} Eliminar seleccionados (<span id="doc-contador-seleccionados">0</span>)
+                </button>
+                <button type="button" class="btn-danger" id="btn-eliminar-todos"
+                        data-total="{{ page_obj.paginator.count }}">
+                    {% icon "trash-2" size=16 %} Eliminar todos
+                </button>
+            </div>
+            {% endif %}
+        </div>
 
         {% for doc in documentos %}
 
             <div class="document-card">
 
                 <div class="document-card-header">
+                    <input type="checkbox" class="doc-checkbox" data-doc-id="{{ doc.id }}">
                     {% icon "file-text" size=18 %}
                     <h3>{{ doc.nombre }}</h3>
                     <span class="status-pill status-pill--{{ doc.estado }}">{{ doc.get_estado_display }}</span>
@@ -148,7 +167,8 @@ Documentos
                     <form method="POST"
                           action="{% url 'eliminar_documento' doc.id %}"
                           style="display:inline"
-                          onsubmit="return confirm('¿Eliminar este documento y su análisis? Esta acción no se puede deshacer.')">
+                          class="form-eliminar-individual"
+                          data-nombre="{{ doc.nombre }}">
                         {% csrf_token %}
                         <button type="submit" class="btn-danger">
                             {% icon "trash-2" size=16 %} Eliminar
@@ -167,6 +187,30 @@ Documentos
 
         {% endfor %}
 
+    </div>
+
+    <form method="POST" action="{% url 'eliminar_documentos_seleccionados' %}" id="form-eliminar-seleccionados" hidden>
+        {% csrf_token %}
+    </form>
+
+    <form method="POST" action="{% url 'eliminar_todos_documentos' %}" id="form-eliminar-todos" hidden>
+        {% csrf_token %}
+    </form>
+
+    <div class="modal-overlay" id="confirmar-modal-overlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>{% icon "triangle-alert" size=18 %} <span id="confirmar-modal-titulo">Confirmar</span></h3>
+                <button class="modal-close" id="confirmar-modal-cerrar" title="Cerrar">{% icon "x" size=18 %}</button>
+            </div>
+            <p id="confirmar-modal-mensaje"></p>
+            <div class="modal-actions">
+                <button type="button" class="btn-secondary" id="confirmar-modal-cancelar">Cancelar</button>
+                <button type="button" class="btn-danger" id="confirmar-modal-confirmar">
+                    {% icon "trash-2" size=14 %} Eliminar
+                </button>
+            </div>
+        </div>
     </div>
 
     {% if page_obj.paginator.num_pages > 1 %}
@@ -233,6 +277,116 @@ document.addEventListener('DOMContentLoaded', function () {
         if (overlay) overlay.classList.add('active');
         if (submitLote) submitLote.disabled = true;
     });
+
+    // ── Modal de confirmación (reemplaza confirm() nativo del navegador) ──
+    var modalOverlay = document.getElementById('confirmar-modal-overlay');
+    var modalTitulo = document.getElementById('confirmar-modal-titulo');
+    var modalMensaje = document.getElementById('confirmar-modal-mensaje');
+    var modalCerrar = document.getElementById('confirmar-modal-cerrar');
+    var modalCancelar = document.getElementById('confirmar-modal-cancelar');
+    var modalConfirmar = document.getElementById('confirmar-modal-confirmar');
+    var accionPendiente = null;
+
+    function pedirConfirmacion(titulo, mensaje, alConfirmar) {
+        modalTitulo.textContent = titulo;
+        modalMensaje.textContent = mensaje;
+        accionPendiente = alConfirmar;
+        modalOverlay.classList.add('is-open');
+    }
+
+    function cerrarModalConfirmacion() {
+        modalOverlay.classList.remove('is-open');
+        accionPendiente = null;
+    }
+
+    if (modalOverlay) {
+        modalCerrar.addEventListener('click', cerrarModalConfirmacion);
+        modalCancelar.addEventListener('click', cerrarModalConfirmacion);
+        modalOverlay.addEventListener('click', function (e) {
+            if (e.target === modalOverlay) cerrarModalConfirmacion();
+        });
+        modalConfirmar.addEventListener('click', function () {
+            var accion = accionPendiente;
+            cerrarModalConfirmacion();
+            if (accion) accion();
+        });
+    }
+
+    // ── Borrado individual: usa el modal en vez del confirm() del navegador ──
+    document.querySelectorAll('.form-eliminar-individual').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            var nombre = form.dataset.nombre;
+            pedirConfirmacion(
+                'Eliminar documento',
+                '¿Eliminar "' + nombre + '" y su análisis? Esta acción no se puede deshacer.',
+                function () { form.submit(); }
+            );
+        });
+    });
+
+    // ── Selección múltiple ──
+    var checkboxes = document.querySelectorAll('.doc-checkbox');
+    var seleccionarTodos = document.getElementById('doc-seleccionar-todos');
+    var btnEliminarSeleccionados = document.getElementById('btn-eliminar-seleccionados');
+    var contadorSeleccionados = document.getElementById('doc-contador-seleccionados');
+    var btnEliminarTodos = document.getElementById('btn-eliminar-todos');
+    var formSeleccionados = document.getElementById('form-eliminar-seleccionados');
+    var formTodos = document.getElementById('form-eliminar-todos');
+
+    function actualizarContador() {
+        var marcados = document.querySelectorAll('.doc-checkbox:checked').length;
+        if (contadorSeleccionados) contadorSeleccionados.textContent = marcados;
+        if (btnEliminarSeleccionados) btnEliminarSeleccionados.disabled = marcados === 0;
+        if (seleccionarTodos) {
+            seleccionarTodos.checked = marcados > 0 && marcados === checkboxes.length;
+        }
+    }
+
+    checkboxes.forEach(function (cb) {
+        cb.addEventListener('change', actualizarContador);
+    });
+
+    if (seleccionarTodos) {
+        seleccionarTodos.addEventListener('change', function () {
+            checkboxes.forEach(function (cb) { cb.checked = seleccionarTodos.checked; });
+            actualizarContador();
+        });
+    }
+
+    if (btnEliminarSeleccionados) {
+        btnEliminarSeleccionados.addEventListener('click', function () {
+            var ids = Array.from(document.querySelectorAll('.doc-checkbox:checked'))
+                .map(function (cb) { return cb.dataset.docId; });
+            if (!ids.length) return;
+
+            pedirConfirmacion(
+                'Eliminar documentos seleccionados',
+                '¿Eliminar ' + ids.length + ' documento' + (ids.length !== 1 ? 's' : '') + ' y su análisis? Esta acción no se puede deshacer.',
+                function () {
+                    ids.forEach(function (id) {
+                        var input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = 'documento_ids';
+                        input.value = id;
+                        formSeleccionados.appendChild(input);
+                    });
+                    formSeleccionados.submit();
+                }
+            );
+        });
+    }
+
+    if (btnEliminarTodos) {
+        btnEliminarTodos.addEventListener('click', function () {
+            var total = btnEliminarTodos.dataset.total || checkboxes.length;
+            pedirConfirmacion(
+                'Eliminar todos los documentos',
+                'Esto va a eliminar TODOS tus documentos y análisis (' + total + ' en total, incluidos los de otras páginas). Esta acción no se puede deshacer.',
+                function () { formTodos.submit(); }
+            );
+        });
+    }
 });
 </script>
 {% endblock %}

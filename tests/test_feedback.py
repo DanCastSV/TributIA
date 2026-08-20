@@ -3,6 +3,7 @@ Pruebas para el endpoint de feedback de clasificación
 (POST /documento/<id>/feedback/).
 """
 
+import re
 import shutil
 import tempfile
 
@@ -71,3 +72,20 @@ class FeedbackAnalisisTests(TestCase):
         self.client.logout()
         respuesta = self.client.post(self._url(), {"feedback": "correcto"})
         self.assertEqual(respuesta.status_code, 302)
+
+    def test_botones_quedan_ocultos_si_ya_hay_feedback_guardado(self):
+        """
+        Bug reportado: al recargar la página después de dar feedback, los
+        botones "Es correcto"/"Hay un error" seguían visibles y clicables,
+        lo que permitía sobrescribir la respuesta anterior por accidente.
+        """
+        self.client.post(self._url(), {"feedback": "correcto"})
+
+        respuesta = self.client.get(f"/documento/{self.documento.id}/")
+        contenido = respuesta.content.decode()
+
+        etiqueta_botones = re.search(r'<div[^>]*id="feedback-botones"[^>]*>', contenido)
+        self.assertIsNotNone(etiqueta_botones)
+        self.assertIn("hidden", etiqueta_botones.group())
+        self.assertContains(respuesta, "Marcaste este análisis como correcto")
+        self.assertContains(respuesta, "Cambiar respuesta")

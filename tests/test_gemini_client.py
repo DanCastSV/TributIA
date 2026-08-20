@@ -115,7 +115,9 @@ class ValidacionRespuestaGeminiTests(unittest.TestCase):
         self.assertEqual(config.response_mime_type, "application/json")
         self.assertIsNotNone(config.response_json_schema)
         self.assertNotIn("maxLength", __import__('json').dumps(config.response_json_schema))
-        self.assertLessEqual(config.max_output_tokens, 2048)
+        # Subido de 2048 a 4096 para dar margen a documentos largos/densos
+        # sin que la respuesta de Gemini se corte a mitad del JSON.
+        self.assertLessEqual(config.max_output_tokens, 4096)
 
     @patch("core.ia.gemini_client.cliente.models.generate_content")
     def test_error_del_sdk_no_filtra_el_mensaje_interno(self, generar):

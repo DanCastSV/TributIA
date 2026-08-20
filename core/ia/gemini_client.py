@@ -218,7 +218,7 @@ Extrae los campos directamente del TEXTO REAL del documento. No uses los datos p
                 response_mime_type="application/json",
                 response_json_schema=RESPUESTA_SCHEMA,
                 temperature=0.1,
-                max_output_tokens=2048,
+                max_output_tokens=4096,
             ),
         )
 
@@ -249,7 +249,7 @@ Extrae los campos directamente del TEXTO REAL del documento. No uses los datos p
     except Exception as e:
         logger.error(
             "gemini_analisis_fallido",
-            extra={"tipo_error": type(e).__name__},
+            extra={"tipo_error": type(e).__name__, "detalle": str(e)[:300]},
         )
         return _resultado_vacio(
             "El análisis con IA no está disponible temporalmente. Inténtalo de nuevo."

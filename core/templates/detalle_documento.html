@@ -153,7 +153,8 @@ Análisis Documento
 
         <div class="feedback-analisis" id="feedback-analisis" data-documento-id="{{ documento.id }}">
             <strong class="feedback-analisis__titulo">¿Este análisis fue correcto?</strong>
-            <div class="feedback-analisis__botones">
+            <div class="feedback-analisis__botones" id="feedback-botones"
+                 {% if analisis.feedback_usuario %}hidden{% endif %}>
                 <button type="button" class="feedback-btn feedback-btn--positivo" id="feedback-btn-correcto"
                         data-valor="correcto">
                     👍 Es correcto
@@ -168,16 +169,26 @@ Análisis Documento
                 <label for="feedback-comentario">¿Qué está mal? (opcional)</label>
                 <textarea id="feedback-comentario" class="input-modern" rows="2"
                           placeholder="Ej. el monto total está mal, no es deducible..."></textarea>
-                <button type="button" class="btn-primary" id="feedback-comentario-enviar">Enviar</button>
+                <div class="feedback-analisis__comentario-acciones">
+                    <button type="button" class="btn-primary" id="feedback-comentario-enviar">
+                        Enviar como incorrecto
+                    </button>
+                    <button type="button" class="feedback-analisis__cambiar" id="feedback-comentario-cancelar">
+                        Volver
+                    </button>
+                </div>
             </div>
 
             <p class="feedback-analisis__estado" id="feedback-estado"
                {% if not analisis.feedback_usuario %}hidden{% endif %}>
-                {% if analisis.feedback_usuario == 'correcto' %}
-                    ✅ Marcaste este análisis como correcto. ¡Gracias!
-                {% elif analisis.feedback_usuario == 'incorrecto' %}
-                    ⚠️ Marcaste este análisis como incorrecto. ¡Gracias por avisar!
-                {% endif %}
+                <span id="feedback-estado-texto">
+                    {% if analisis.feedback_usuario == 'correcto' %}
+                        ✅ Marcaste este análisis como correcto. ¡Gracias!
+                    {% elif analisis.feedback_usuario == 'incorrecto' %}
+                        ⚠️ Marcaste este análisis como incorrecto. ¡Gracias por avisar!
+                    {% endif %}
+                </span>
+                <button type="button" class="feedback-analisis__cambiar" id="feedback-cambiar">Cambiar respuesta</button>
             </p>
         </div>
 
@@ -296,15 +307,37 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!contenedor) return;
 
     var documentoId = contenedor.dataset.documentoId;
+    var botones = document.getElementById('feedback-botones');
     var btnCorrecto = document.getElementById('feedback-btn-correcto');
     var btnIncorrecto = document.getElementById('feedback-btn-incorrecto');
     var comentarioWrap = document.getElementById('feedback-comentario-wrap');
     var comentarioInput = document.getElementById('feedback-comentario');
     var btnEnviarComentario = document.getElementById('feedback-comentario-enviar');
+    var btnCancelarComentario = document.getElementById('feedback-comentario-cancelar');
     var estado = document.getElementById('feedback-estado');
+    var estadoTexto = document.getElementById('feedback-estado-texto');
+    var btnCambiar = document.getElementById('feedback-cambiar');
     var csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    var enviando = false;
+
+    // Una vez que hay una respuesta guardada (mandada o cargada del servidor),
+    // se bloquean los botones y el cuadro de comentario para que un clic
+    // suelto en cualquiera de los dos no sobrescriba la respuesta anterior
+    // (bug reportado: click en "Es correcto" y después en "Enviar" del
+    // cuadro de comentario terminaba mandando "incorrecto" igual).
+    function mostrarRespuestaGuardada(valor) {
+        botones.hidden = true;
+        comentarioWrap.hidden = true;
+        estado.hidden = false;
+        estadoTexto.textContent = valor === 'correcto'
+            ? '✅ Marcaste este análisis como correcto. ¡Gracias!'
+            : '⚠️ Marcaste este análisis como incorrecto. ¡Gracias por avisar!';
+    }
 
     function enviarFeedback(valor, comentario) {
+        if (enviando) return;
+        enviando = true;
+
         var datos = new URLSearchParams();
         datos.set('feedback', valor);
         if (comentario) datos.set('comentario', comentario);
@@ -319,21 +352,22 @@ document.addEventListener('DOMContentLoaded', function () {
         })
             .then(function (res) { return res.json(); })
             .then(function (data) {
+                enviando = false;
                 if (data.error) return;
-                comentarioWrap.hidden = true;
-                estado.hidden = false;
-                estado.textContent = valor === 'correcto'
-                    ? '✅ Marcaste este análisis como correcto. ¡Gracias!'
-                    : '⚠️ Marcaste este análisis como incorrecto. ¡Gracias por avisar!';
-            });
+                mostrarRespuestaGuardada(valor);
+            })
+            .catch(function () { enviando = false; });
     }
 
     btnCorrecto.addEventListener('click', function () {
-        comentarioWrap.hidden = true;
         enviarFeedback('correcto', '');
     });
 
     btnIncorrecto.addEventListener('click', function () {
+        // Se ocultan los botones iniciales para que "Enviar como incorrecto"
+        // quede como la única acción visible en este paso — antes convivía
+        // con "Es correcto" al lado y era fácil tocar el equivocado.
+        botones.hidden = true;
         comentarioWrap.hidden = false;
         comentarioInput.focus();
     });
@@ -341,6 +375,22 @@ document.addEventListener('DOMContentLoaded', function () {
     btnEnviarComentario.addEventListener('click', function () {
         enviarFeedback('incorrecto', comentarioInput.value.trim());
     });
+
+    if (btnCancelarComentario) {
+        btnCancelarComentario.addEventListener('click', function () {
+            comentarioWrap.hidden = true;
+            comentarioInput.value = '';
+            botones.hidden = false;
+        });
+    }
+
+    if (btnCambiar) {
+        btnCambiar.addEventListener('click', function () {
+            estado.hidden = true;
+            comentarioWrap.hidden = true;
+            botones.hidden = false;
+        });
+    }
 });
 </script>
 {% endif %}

@@ -93,6 +93,18 @@ path(
 ),
 
 path(
+    'documentos/eliminar-seleccionados/',
+    views.eliminar_documentos_seleccionados,
+    name='eliminar_documentos_seleccionados'
+),
+
+path(
+    'documentos/eliminar-todos/',
+    views.eliminar_todos_documentos,
+    name='eliminar_todos_documentos'
+),
+
+path(
     'documento/<int:documento_id>/descargar/',
     views.descargar_documento,
     name='descargar_documento'

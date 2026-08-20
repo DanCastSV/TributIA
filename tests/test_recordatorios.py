@@ -1,9 +1,18 @@
 """
 Pruebas para el comando enviar_recordatorios_fiscales.
+
+"Hoy" se congela a una fecha fija y lejos de cualquier fecha fiscal fija
+(ISR el día 10, IVA el día 21) para que estas pruebas no dependan de en
+qué día del mes real se ejecuten — de otro modo, correr la suite cerca
+del día 10 o 21 hace que el comando mande un correo real por una fecha
+fiscal fija aunque el usuario de prueba no tenga ningún evento propio,
+y los asserts de "no debe enviar nada" fallan sin que el código esté roto.
 """
 
+import datetime as _dt
 from datetime import date, timedelta
 from io import StringIO
+from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core import mail
@@ -12,12 +21,23 @@ from django.test import TestCase
 
 from core.models import EventoCalendario
 
+HOY_FIJO = date(2026, 1, 15)
+
+
+class _FechaFija(_dt.date):
+    @classmethod
+    def today(cls):
+        return HOY_FIJO
+
 
 class EnviarRecordatoriosFiscalesTests(TestCase):
 
     def setUp(self):
         self.usuario = User.objects.create_user(
             username="recordatorio_user", password="clave12345", email="usuario@example.com",
+        )
+        self.enterContext(
+            patch("core.management.commands.enviar_recordatorios_fiscales.date", _FechaFija)
         )
 
     def _correr_comando(self, dias=3):
@@ -33,7 +53,7 @@ class EnviarRecordatoriosFiscalesTests(TestCase):
         EventoCalendario.objects.create(
             usuario=self.usuario,
             titulo="Vence factura proveedor",
-            fecha=date.today() + timedelta(days=1),
+            fecha=HOY_FIJO + timedelta(days=1),
             tipo="vencimiento",
         )
 
@@ -48,7 +68,7 @@ class EnviarRecordatoriosFiscalesTests(TestCase):
         EventoCalendario.objects.create(
             usuario=self.usuario,
             titulo="Evento propio",
-            fecha=date.today(),
+            fecha=HOY_FIJO,
             tipo="recordatorio",
         )
 
@@ -62,7 +82,7 @@ class EnviarRecordatoriosFiscalesTests(TestCase):
         EventoCalendario.objects.create(
             usuario=self.usuario,
             titulo="Evento lejano",
-            fecha=date.today() + timedelta(days=30),
+            fecha=HOY_FIJO + timedelta(days=30),
             tipo="recordatorio",
         )
 

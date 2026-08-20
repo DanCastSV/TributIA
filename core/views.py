@@ -566,15 +566,9 @@ def subir_documentos_lote(request):
     return redirect('documentos')
 
 
-@login_required
-@require_http_methods(['POST'])
-def eliminar_documento(request, documento_id):
-    documento = get_object_or_404(
-        DocumentoTributario,
-        id=documento_id,
-        usuario=request.user
-    )
-    # Eliminar el archivo físico del disco
+def _eliminar_documento_con_archivo(documento):
+    """Borra el archivo físico (si existe) y luego el registro. Compartido
+    entre el borrado individual, el de seleccionados y el de todos."""
     if documento.archivo:
         try:
             documento.archivo.delete(save=False)
@@ -584,6 +578,45 @@ def eliminar_documento(request, documento_id):
                 extra={'documento_id': documento.id, 'tipo_error': type(e).__name__},
             )
     documento.delete()
+
+
+@login_required
+@require_http_methods(['POST'])
+def eliminar_documento(request, documento_id):
+    documento = get_object_or_404(
+        DocumentoTributario,
+        id=documento_id,
+        usuario=request.user
+    )
+    _eliminar_documento_con_archivo(documento)
+    return redirect('documentos')
+
+
+@login_required
+@require_http_methods(['POST'])
+def eliminar_documentos_seleccionados(request):
+    ids = [i for i in request.POST.getlist('documento_ids') if i.isdigit()]
+    documentos = DocumentoTributario.objects.filter(usuario=request.user, id__in=ids)
+    cantidad = documentos.count()
+    for documento in documentos:
+        _eliminar_documento_con_archivo(documento)
+    if cantidad:
+        messages.success(
+            request,
+            f'{cantidad} documento{"s" if cantidad != 1 else ""} eliminado{"s" if cantidad != 1 else ""}.'
+        )
+    return redirect('documentos')
+
+
+@login_required
+@require_http_methods(['POST'])
+def eliminar_todos_documentos(request):
+    documentos = DocumentoTributario.objects.filter(usuario=request.user)
+    cantidad = documentos.count()
+    for documento in documentos:
+        _eliminar_documento_con_archivo(documento)
+    if cantidad:
+        messages.success(request, f'Se eliminaron los {cantidad} documentos.')
     return redirect('documentos')
 
 
