@@ -32,6 +32,20 @@
     </nav>
 
     <main role="main">
+        {% if messages %}
+        <div class="doc-messages public-messages">
+            {% for msg in messages %}
+            <div class="doc-msg doc-msg--{{ msg.tags }}">
+                {% if msg.tags == 'warning' %}{% icon "triangle-alert" size=16 %}
+                {% elif msg.tags == 'success' %}{% icon "circle-check" size=16 %}
+                {% elif msg.tags == 'error' %}{% icon "circle-x" size=16 %}
+                {% else %}{% icon "info" size=16 %}{% endif %}
+                {{ msg }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
         {% block content %}
         {% endblock %}
     </main>

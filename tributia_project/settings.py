@@ -215,6 +215,15 @@ EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() == 'true'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'TributIA <tributia@polarzero.dev>')
+
+# Fase 2 (verificación de correo, opt-in): apagado por defecto a
+# propósito. El registro siempre manda el correo de verificación, pero
+# el login solo se bloquea para cuentas sin verificar si esto está en
+# 'true' — así se puede confirmar que el envío funciona en un entorno
+# antes de arriesgarse a bloquear a alguien.
+EMAIL_VERIFICATION_REQUIRED = os.environ.get('EMAIL_VERIFICATION_REQUIRED', 'false').lower() == 'true'
+EMAIL_VERIFICATION_TOKEN_HORAS = int(os.environ.get('EMAIL_VERIFICATION_TOKEN_HORAS', '48'))
+
 LOGOUT_REDIRECT_URL = '/'
 
 MEDIA_URL = '/media/'

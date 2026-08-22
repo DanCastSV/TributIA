@@ -141,6 +141,21 @@ class LoginForm(AuthenticationForm):
         )
     )
 
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+
+        from django.conf import settings as django_settings
+
+        if not django_settings.EMAIL_VERIFICATION_REQUIRED:
+            return
+
+        perfil = getattr(user, 'perfiltributario', None)
+        if perfil is None or perfil.email_verified_at is None:
+            raise forms.ValidationError(
+                'Tenés que verificar tu correo antes de iniciar sesión. Revisá tu bandeja de entrada.',
+                code='correo_no_verificado',
+            )
+
 class SolicitudResetPasswordForm(PasswordResetForm):
 
     email = forms.EmailField(

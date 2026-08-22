@@ -12,15 +12,22 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import Count, Q, Sum
 from django.db.models.functions import TruncMonth
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
 from core.analysis_capacity import CapacidadAnalisisAgotada, reservar_capacidad_analisis
 from core.datos_el_salvador import DATOS_EL_SALVADOR
+from core.email_verificacion import (
+    enviar_correo_verificacion,
+    generar_token_verificacion,
+    verificar_token,
+)
 from core.fechas_fiscales import fechas_fiscales_mes
 from core.formularios_fiscales import formularios_con_checklist
 from core.ocr_utils import validar_archivo
@@ -325,12 +332,33 @@ def registro(request):
 
         if form.is_valid():
 
-            usuario = form.save()
+            with transaction.atomic():
+                usuario = form.save()
+                PerfilTributario.objects.create(usuario=usuario)
+                token_crudo = generar_token_verificacion(usuario)
 
-            PerfilTributario.objects.create(
-                usuario=usuario
+            url_verificacion = request.build_absolute_uri(
+                f"{reverse('verificar_correo')}?token={token_crudo}"
             )
+            enviado = enviar_correo_verificacion(usuario, url_verificacion)
 
+            if not enviado:
+                # Sin correo de verificación la cuenta queda huérfana
+                # (nadie puede verificarla) — se revierte en vez de
+                # dejarla a medias. El cascade de FK borra también el
+                # perfil y el token recién creados.
+                usuario.delete()
+                logger.error('registro_verificacion_no_enviada', extra={'username': form.cleaned_data.get('username')})
+                messages.error(
+                    request,
+                    'No pudimos enviarte el correo de verificación. Intentá registrarte de nuevo en un momento.'
+                )
+                return render(request, 'registro.html', {'form': form})
+
+            messages.success(
+                request,
+                f'Te registraste con éxito. Revisá {usuario.email} para verificar tu cuenta antes de iniciar sesión.'
+            )
             return redirect('login')
 
     else:
@@ -342,6 +370,19 @@ def registro(request):
         'registro.html',
         {'form': form}
     )
+
+
+def verificar_correo(request):
+    token = request.GET.get('token', '')
+    ok, _usuario = verificar_token(token)
+
+    if ok:
+        messages.success(request, 'Tu correo fue verificado. Ya podés iniciar sesión.')
+    else:
+        messages.error(request, 'El enlace de verificación no es válido o ya expiró.')
+
+    return redirect('login')
+
 
 @login_required
 def perfil(request):

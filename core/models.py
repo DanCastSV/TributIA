@@ -45,6 +45,14 @@ class PerfilTributario(models.Model):
         auto_now_add=True
     )
 
+    # NULL = correo sin verificar. Los usuarios registrados antes de esta
+    # función se backfillean con la fecha de creación de su cuenta
+    # (ver migración de datos) para no bloquearlos con la política nueva.
+    email_verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     @property
     def datos_clave_completos(self):
         return bool(self.salario_mensual) and bool(self.actividad_economica)
@@ -461,3 +469,24 @@ class UsoGemini(models.Model):
 
     def __str__(self):
         return f"{self.usuario.username} · {self.tipo} · {self.tokens_total} tokens"
+
+
+class EmailVerificationToken(models.Model):
+    """Token de un solo uso para verificar el correo al registrarse. Solo
+    se guarda el hash — el token en claro únicamente existe en el enlace
+    del correo enviado, nunca en la base de datos."""
+
+    token_hash = models.CharField(max_length=64, unique=True)
+
+    usuario = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='tokens_verificacion',
+    )
+
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Token verificación · {self.usuario.username}"
