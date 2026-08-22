@@ -1436,6 +1436,13 @@ textarea:focus{
     color:#991b1b;
 }
 
+.public-messages{
+    width:100%;
+    max-width:480px;
+    margin:24px auto 0;
+    padding:0 20px;
+}
+
 /* ── Recursos Fiscales ── */
 .aviso-legal{
     display:flex;

@@ -203,13 +203,27 @@ STORAGES = {
 LOGIN_REDIRECT_URL = '/dashboard/'
 LOGIN_URL = '/login/'
 
+# SMTP parametrizado por entorno (antes fijo a smtp.gmail.com). Sin
+# valores hardcodeados: el host/puerto por defecto apuntan al servidor
+# propio del equipo, pero todo es overrideable por variable de entorno
+# y las credenciales nunca tienen default — si no están seteadas, el
+# envío de correo simplemente falla en vez de usar algo inventado.
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.gmail.com'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'mail.polarzero.dev')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'true').lower() == 'true'
 EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
 EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
-DEFAULT_FROM_EMAIL = f"TributIA <{os.environ.get('EMAIL_HOST_USER', '')}>"
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'TributIA <tributia@polarzero.dev>')
+
+# Fase 2 (verificación de correo, opt-in): apagado por defecto a
+# propósito. El registro siempre manda el correo de verificación, pero
+# el login solo se bloquea para cuentas sin verificar si esto está en
+# 'true' — así se puede confirmar que el envío funciona en un entorno
+# antes de arriesgarse a bloquear a alguien.
+EMAIL_VERIFICATION_REQUIRED = os.environ.get('EMAIL_VERIFICATION_REQUIRED', 'false').lower() == 'true'
+EMAIL_VERIFICATION_TOKEN_HORAS = int(os.environ.get('EMAIL_VERIFICATION_TOKEN_HORAS', '48'))
+
 LOGOUT_REDIRECT_URL = '/'
 
 MEDIA_URL = '/media/'

@@ -10,6 +10,7 @@ from .forms import LoginForm, SolicitudResetPasswordForm, NuevaPasswordForm
 urlpatterns = [
     path('', views.home, name='home'),
     path('registro/', views.registro, name='registro'),
+    path('verificar-correo/', views.verificar_correo, name='verificar_correo'),
     path(
     'login/',
     LoginView.as_view(
